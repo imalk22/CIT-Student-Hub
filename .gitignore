@@ -1,0 +1,6 @@
+node_modules/
+outbox/
+.env
+ref/
+_test*
+data-files/

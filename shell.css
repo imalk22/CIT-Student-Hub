@@ -1,0 +1,196 @@
+/* =====================================================================
+   SHELL & PROFESSIONAL GLASS THEME — sidebar layout, navy dark mode, refined cards
+   (visual language follows the ExamLens dashboard)
+   ===================================================================== */
+
+/* ---------- navy dark mode ---------- */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#060b18; --base:#060b18; --card:#0f1a33; --card2:#13203d; --sheet:#0b1429;
+  --text:#eef2ff; --muted:#93a0bf; --line:rgba(148,163,209,.15); --fill:rgba(148,163,209,.14); --fill2:rgba(148,163,209,.075);
+  --card-a:rgba(20,32,62,.74); --card-b:rgba(11,19,40,.56); --edge:rgba(130,165,255,.13); --hi:rgba(255,255,255,.06);
+  --shade:rgba(2,6,23,.55); --shade-up:rgba(2,6,23,.75); --glass:rgba(10,18,38,.74); --glare:rgba(120,165,255,.14);
+  --mesh1:rgba(37,99,235,.38); --mesh2:rgba(99,102,241,.30); --mesh3:rgba(14,165,233,.13); --mesh4:rgba(139,92,246,.20);
+  --row-hover:rgba(59,130,246,.10); --gray:#3a4664; --blue:#3b8bff; --indigo:#6d6ff0;}}
+:root[data-theme="dark"]{
+  --bg:#060b18; --base:#060b18; --card:#0f1a33; --card2:#13203d; --sheet:#0b1429;
+  --text:#eef2ff; --muted:#93a0bf; --line:rgba(148,163,209,.15); --fill:rgba(148,163,209,.14); --fill2:rgba(148,163,209,.075);
+  --card-a:rgba(20,32,62,.74); --card-b:rgba(11,19,40,.56); --edge:rgba(130,165,255,.13); --hi:rgba(255,255,255,.06);
+  --shade:rgba(2,6,23,.55); --shade-up:rgba(2,6,23,.75); --glass:rgba(10,18,38,.74); --glare:rgba(120,165,255,.14);
+  --mesh1:rgba(37,99,235,.38); --mesh2:rgba(99,102,241,.30); --mesh3:rgba(14,165,233,.13); --mesh4:rgba(139,92,246,.20);
+  --row-hover:rgba(59,130,246,.10); --gray:#3a4664; --blue:#3b8bff; --indigo:#6d6ff0;}
+:root{--sb:268px}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,sans-serif}
+/* subtle grid texture on top of the mesh */
+#app::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.35;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:56px 56px;
+  -webkit-mask-image:radial-gradient(ellipse 80% 60% at 50% 0%,#000 30%,transparent 75%);mask-image:radial-gradient(ellipse 80% 60% at 50% 0%,#000 30%,transparent 75%)}
+@media print{#app::before{display:none}}
+
+/* ---------- refined cards & type ---------- */
+#app .card,.typecard{border-radius:20px}
+main h1{font-weight:750;letter-spacing:-.045em}
+.sub{font-size:15px}
+.h2row h2{font-size:19px;letter-spacing:-.02em}
+.chip{font-weight:600;letter-spacing:.01em}
+.av{font-weight:650;letter-spacing:.02em}
+.btn{font-weight:600}
+
+/* ---------- sparkline ---------- */
+.spark{width:100%;height:40px;display:block;overflow:visible;margin-top:auto}
+.spark .sl{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1.4s var(--ease) .3s forwards}
+.spark .sa{opacity:0;animation:fadein2 1s ease .9s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes fadein2{to{opacity:1}}
+
+/* ---------- sidebar (desktop) ---------- */
+.sidebar{display:none}
+@media (min-width:1100px){
+  .sidebar{display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;width:var(--sb);z-index:35;padding:22px 16px 18px;
+    background:linear-gradient(180deg,var(--card-a),var(--card-b));backdrop-filter:blur(34px) saturate(190%);-webkit-backdrop-filter:blur(34px) saturate(190%);
+    border-right:1px solid var(--edge);box-shadow:8px 0 40px var(--shade)}
+  .sb-brand{display:flex;align-items:center;gap:11px;padding:2px 8px 22px}
+  .sb-brand img{width:38px;height:38px;border-radius:11px;background:#fff;padding:3px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+  .sb-brand b{display:block;font-size:16px;letter-spacing:-.02em}
+  .sb-brand b span{background:linear-gradient(90deg,var(--blue),var(--indigo));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sb-brand small{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+  .sb-nav{display:flex;flex-direction:column;gap:3px}
+  .sb-nav button{display:flex;align-items:center;gap:12px;border:0;background:none;color:var(--text);font-size:14.5px;font-weight:500;text-align:left;
+    padding:8px 10px;border-radius:13px;cursor:pointer;transition:background .2s,transform .2s var(--ease),box-shadow .25s}
+  .sb-nav button:hover{background:var(--fill2);transform:translateX(2px)}
+  .sb-nav button.on{background:var(--card);font-weight:650;box-shadow:0 1px 0 var(--hi) inset,0 6px 18px var(--shade),0 0 0 1px var(--edge)}
+  .sb-ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;background-color:var(--c);
+    background-image:linear-gradient(180deg,rgba(255,255,255,.38),rgba(255,255,255,0) 55%);box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 3px 8px rgba(0,0,0,.25)}
+  .sb-ic svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+  .sb-foot{margin-top:auto;padding:14px 8px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+  .sb-theme{display:flex;align-items:center;gap:10px;border:0;background:none;color:var(--text);font-size:14px;cursor:pointer;padding:0}
+  .sb-theme .sw{width:38px;height:22px;border-radius:99px;background:var(--fill);position:relative;transition:background .25s}
+  .sb-theme .sw i{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);transition:transform .3s var(--spring)}
+  .sb-theme.on .sw{background:var(--blue)}.sb-theme.on .sw i{transform:translateX(16px)}
+  .sb-meta{font-size:12px;color:var(--muted);line-height:1.5}
+
+  /* hide phone chrome, widen the canvas */
+  .topbar,.tabbar{display:none!important}
+  body{padding-bottom:0}
+  main{max-width:none;margin:0 0 0 var(--sb);padding:30px clamp(28px,3.2vw,60px) 70px}
+  main > .view{max-width:1480px;margin:0 auto}
+  main h1{font-size:44px;margin-top:6px}
+  .stickyfoot{bottom:20px}
+  .rnav{top:0}
+  .toast{left:calc(50% + var(--sb) / 2)}
+  /* sheets become centred glass dialogs */
+  .sheet{left:calc(50% + var(--sb) / 2);top:50%;bottom:auto;width:min(780px,calc(100vw - var(--sb) - 64px));max-height:88vh;border-radius:24px;
+    transform:translate(-50%,-46%) scale(.97);opacity:0;pointer-events:none;transition:transform .45s var(--spring),opacity .3s ease;padding-bottom:24px;
+    border:1px solid var(--edge)}
+  .sheet.on{transform:translate(-50%,-50%) scale(1);opacity:1;pointer-events:auto}
+  .sheet.wide{width:min(1080px,calc(100vw - var(--sb) - 64px))}
+  .sheet .grab{display:none}
+  body.sheet-open main{transform:scale(.985);opacity:.6}
+  /* roomier grids */
+  .spot{padding-top:46px}
+  .spotbox{max-width:860px;height:70px}
+  .spot-title{font-size:48px!important}
+  .hits{grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
+  .mlist{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
+  .glance{grid-template-columns:repeat(4,1fr)}
+}
+@media (min-width:760px) and (max-width:1099px){
+  main,.topbar{max-width:1060px}
+}
+
+/* =====================================================================
+   MEMBERS — hero with rings, KPI cards with trend lines
+   ===================================================================== */
+#app .card.mhero2{display:flex;align-items:center;justify-content:space-between;gap:28px;padding:26px 30px;overflow:hidden}
+.mh-text{flex:1;min-width:0}
+.mh-text h3{font-size:clamp(28px,3vw,40px);font-weight:750;letter-spacing:-.05em;line-height:1.05;margin:6px 0 10px;
+  background:linear-gradient(95deg,var(--text) 25%,var(--blue) 62%,var(--indigo));-webkit-background-clip:text;background-clip:text;color:transparent}
+.mh-text p{color:var(--muted);font-size:15px;line-height:1.55;margin:0;max-width:640px}
+.mh-text p b{color:var(--text)}
+.mh-rings{display:flex;align-items:center;gap:22px;flex:none}
+.mh-rings svg{width:158px;height:158px;transform:rotate(-90deg);filter:drop-shadow(0 8px 16px rgba(0,0,0,.25))}
+@media (max-width:860px){#app .card.mhero2{flex-direction:column;align-items:flex-start}.mh-rings svg{width:126px;height:126px}}
+.kpi4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:14px 0}
+@media (max-width:1100px){.kpi4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.kpi4{grid-template-columns:minmax(0,1fr)}}
+#app .card.kpi{display:flex;flex-direction:column;padding:16px 18px 12px;min-height:148px;overflow:hidden}
+.kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--ac);opacity:.95}
+.kpi .kl{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ac)}
+.kpi .kr{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:5px}
+.kpi .kv{font-size:clamp(22px,2vw,30px);font-weight:750;letter-spacing:-.045em;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpi .kd{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap;background:var(--fill);color:var(--muted)}
+.kpi .kd.bad{background:rgba(255,69,58,.15);color:#ff6b61}.kpi .kd.good{background:rgba(48,209,88,.16);color:#2fbf5b}
+.kpi .kn{font-size:12px;color:var(--muted);margin-top:3px}
+.kpi .stack{display:flex;gap:3px;height:9px;border-radius:99px;overflow:hidden;margin-top:auto}
+.kpi .stack i{display:block;height:100%;transform-origin:left;animation:growx 1s var(--ease) .3s backwards}
+
+/* member directory cards — calmer, more professional */
+#app .card.mcard{padding:14px 16px;border-radius:18px}
+.mc-id b{font-weight:650;letter-spacing:-.01em}
+.mav{box-shadow:0 0 0 2px var(--card),0 0 0 3.5px color-mix(in srgb,var(--blue) 45%,transparent),0 6px 14px rgba(0,0,0,.25)}
+.mav-ini{background-image:linear-gradient(160deg,rgba(255,255,255,.22),rgba(0,0,0,.12))}
+.yd{width:10px;height:10px;border-radius:3px}
+.mc-amt{font-size:14.5px}
+
+/* =====================================================================
+   PROFILES — glass hero with animated mesh, ringed photo, stat rings
+   ===================================================================== */
+#app .card.pass{border-radius:24px}
+.pass-band{height:150px!important;position:relative;overflow:hidden;
+  background:radial-gradient(60% 120% at 12% 0%,color-mix(in srgb,var(--hue) 75%,#fff 10%) 0%,transparent 60%),
+    radial-gradient(55% 140% at 88% 10%,color-mix(in srgb,var(--hue) 40%,#6d28d9) 0%,transparent 60%),
+    radial-gradient(70% 120% at 50% 120%,color-mix(in srgb,var(--hue) 50%,#0ea5e9) 0%,transparent 60%),
+    linear-gradient(120deg,color-mix(in srgb,var(--hue) 70%,#0b1430),#0b1430)!important}
+.pass-band::before{content:"";position:absolute;inset:-40%;background:conic-gradient(from 0deg,transparent,rgba(255,255,255,.10),transparent 30%);animation:spinslow 18s linear infinite}
+.pass-band::after{background:repeating-linear-gradient(115deg,rgba(255,255,255,.05) 0 1px,transparent 1px 16px)!important}
+.pass-band.gold{background:radial-gradient(60% 120% at 12% 0%,#ffe7a3 0%,transparent 60%),radial-gradient(55% 140% at 88% 10%,#b45309 0%,transparent 60%),linear-gradient(120deg,#c8932e,#2a1d05)!important}
+@keyframes spinslow{to{transform:rotate(360deg)}}
+.pass-main{margin-top:-62px!important;align-items:flex-end;padding:0 28px!important}
+.av.big,.mphoto{position:relative;width:118px!important;height:118px!important;border-radius:32px!important;font-size:38px!important;border:0!important;
+  box-shadow:0 0 0 4px var(--card),0 18px 40px rgba(0,0,0,.35)!important}
+.av.big{border-radius:50%!important}
+.av.big::after,.mphoto::after{content:"";position:absolute;inset:-7px;border-radius:inherit;padding:2px;pointer-events:none;
+  background:conic-gradient(from var(--ang,0deg),var(--blue),var(--indigo),#22d3ee,var(--blue));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:ringspin 6s linear infinite}
+.av.big::after{border-radius:50%}
+@property --ang{syntax:"<angle>";inherits:false;initial-value:0deg}
+@keyframes ringspin{to{--ang:360deg}}
+.pname{font-size:clamp(24px,2.6vw,34px)!important;letter-spacing:-.04em!important;font-weight:750!important}
+.pass-id{padding-bottom:8px!important}
+.pass-stats{display:flex;gap:14px;flex:none;align-self:flex-end;padding-bottom:6px}
+.pst{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:96px;padding:12px 12px 10px;border-radius:18px;
+  background:linear-gradient(160deg,var(--card-a),var(--card-b));border:1px solid var(--edge);box-shadow:0 8px 22px var(--shade)}
+.pst svg{width:62px;height:62px;transform:rotate(-90deg)}
+.pst b{font-size:15px;font-weight:750;letter-spacing:-.02em;margin-top:-50px;height:44px;line-height:44px;font-variant-numeric:tabular-nums}
+.pst small{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center}
+@media (max-width:900px){.pass-stats{width:100%;justify-content:flex-start;padding-top:10px}}
+.answer{margin:20px 28px 26px!important;border-radius:18px!important;background:linear-gradient(120deg,rgba(59,130,246,.10),rgba(139,92,246,.07))!important;border:1px solid var(--edge)!important}
+.ans-t{font-size:clamp(17px,1.5vw,20px)!important}
+@media (min-width:1100px){
+  .pgrid{grid-template-columns:minmax(0,1fr) minmax(0,1.9fr)!important;gap:18px!important}
+  .pcol:first-child{position:sticky;top:20px;align-self:start}
+}
+.tile{border-radius:16px!important;border:1px solid var(--edge)}
+.lg-y{border-radius:16px!important;border:1px solid var(--edge)}
+/* fixes after full-resolution review */
+.kpi .kr{flex-wrap:wrap;row-gap:4px}
+.kpi .kv{min-width:0}
+.spotbox.mspot{max-width:none!important}
+@media (min-width:1100px) and (max-width:1399px){.kpi4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---------- layout choice: no left sidebar; floating bottom menu on every screen, full-width content ---------- */
+@media (min-width:1100px){
+  .sidebar{display:none!important}
+  .tabbar{display:flex!important}
+  .topbar{display:flex!important;max-width:1600px;margin:0 auto;padding:18px clamp(28px,3.2vw,60px) 6px;background:none}
+  body{padding-bottom:calc(120px + env(safe-area-inset-bottom))}
+  main{max-width:1600px;margin:0 auto;padding:4px clamp(28px,3.2vw,60px) 40px}
+  main > .view{max-width:none}
+  .toast{left:50%}
+  .sheet{left:50%;width:min(780px,calc(100vw - 64px))}
+  .sheet.wide{width:min(1080px,calc(100vw - 64px))}
+  .stickyfoot{bottom:calc(96px + env(safe-area-inset-bottom))}
+  .tabbar{bottom:22px;padding:6px}
+  .tabbar button{min-width:92px;padding:7px 18px 6px;font-size:11.5px}
+  .brand img{width:34px;height:34px}
+  .brand span{font-size:16px}
+}

@@ -1,0 +1,131 @@
+/* =====================================================================
+   MOTION + GLASS LAYER — visual style inspired by ExamLens
+   ===================================================================== */
+:root{
+  --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.32,.72,0,1);
+  --card-a:rgba(255,255,255,.82); --card-b:rgba(255,255,255,.55);
+  --edge:rgba(255,255,255,.85); --hi:rgba(255,255,255,.95);
+  --shade:rgba(40,60,120,.11); --shade-up:rgba(40,60,120,.2);
+  --mesh1:rgba(0,122,255,.26); --mesh2:rgba(175,82,222,.20); --mesh3:rgba(52,199,89,.17); --mesh4:rgba(255,149,0,.16);
+  --base:#eef0f7; --glare:rgba(255,255,255,.45); --row-hover:rgba(0,122,255,.06);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --card-a:rgba(44,44,52,.72); --card-b:rgba(28,28,34,.52); --edge:rgba(255,255,255,.09); --hi:rgba(255,255,255,.08);
+  --shade:rgba(0,0,0,.38); --shade-up:rgba(0,0,0,.6);
+  --mesh1:rgba(10,132,255,.28); --mesh2:rgba(191,90,242,.22); --mesh3:rgba(48,209,88,.10); --mesh4:rgba(255,159,10,.10);
+  --base:#0a0a0f; --glare:rgba(255,255,255,.12); --row-hover:rgba(10,132,255,.12); --sheet:#16161b;}}
+:root[data-theme="dark"]{
+  --card-a:rgba(44,44,52,.72); --card-b:rgba(28,28,34,.52); --edge:rgba(255,255,255,.09); --hi:rgba(255,255,255,.08);
+  --shade:rgba(0,0,0,.38); --shade-up:rgba(0,0,0,.6);
+  --mesh1:rgba(10,132,255,.28); --mesh2:rgba(191,90,242,.22); --mesh3:rgba(48,209,88,.10); --mesh4:rgba(255,159,10,.10);
+  --base:#0a0a0f; --glare:rgba(255,255,255,.12); --row-hover:rgba(10,132,255,.12); --sheet:#16161b;}
+
+/* ---- mesh background, slowly drifting ---- */
+body{background:var(--base)}
+body::before{content:"";position:fixed;inset:-5%;z-index:-1;pointer-events:none;
+  background:radial-gradient(900px 520px at 6% -6%,var(--mesh1),transparent 62%),
+    radial-gradient(800px 520px at 98% 2%,var(--mesh2),transparent 60%),
+    radial-gradient(900px 600px at 72% 108%,var(--mesh3),transparent 62%),
+    radial-gradient(700px 500px at -4% 104%,var(--mesh4),transparent 60%);
+  animation:meshdrift 26s ease-in-out infinite alternate}
+@keyframes meshdrift{to{transform:translate3d(0,-2.5%,0) scale(1.06)}}
+.topbar{background:linear-gradient(var(--base) 25%,transparent)}
+
+/* ---- top loading bar ---- */
+body.loading::after{content:"";position:fixed;top:0;left:0;height:3px;width:38%;z-index:999;border-radius:0 3px 3px 0;
+  background:linear-gradient(90deg,var(--blue),var(--purple),#ff2d55);box-shadow:0 0 12px rgba(0,122,255,.6);animation:loadbar 1.1s var(--ease) infinite}
+@keyframes loadbar{from{transform:translateX(-100%)}to{transform:translateX(270%)}}
+
+/* ---- gradient large titles ---- */
+main h1{background:linear-gradient(95deg,var(--text) 30%,color-mix(in srgb,var(--text) 65%,var(--blue)));-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:-.04em}
+
+/* ---- glass surfaces ---- */
+#app .card,.typecard{background:linear-gradient(160deg,var(--card-a),var(--card-b));
+  backdrop-filter:blur(26px) saturate(190%);-webkit-backdrop-filter:blur(26px) saturate(190%);
+  border:1px solid var(--edge);box-shadow:0 1px 0 var(--hi) inset,0 12px 32px var(--shade),0 2px 6px rgba(0,0,0,.04);border-radius:22px;position:relative}
+.sheet .card{background:var(--card);border:1px solid var(--edge);box-shadow:0 1px 0 var(--hi) inset,0 6px 18px var(--shade);border-radius:20px}
+#app .card.drop{border:2px dashed color-mix(in srgb,var(--muted) 45%,transparent)}
+
+/* ---- entrance animations ---- */
+@keyframes rise{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes rowin{from{opacity:0;transform:translateX(-8px)}}
+@keyframes growx{from{transform:scaleX(0)}}
+@keyframes viewin{from{opacity:0;transform:translateY(8px)}}
+.view{animation:viewin .45s var(--ease)}
+.view .card,.typecard{animation:rise .7s var(--ease) backwards;animation-delay:calc(var(--i,0) * 55ms)}
+.fxrow{animation:rowin .5s var(--ease) backwards;animation-delay:calc(var(--n,0) * 22ms)}
+.bar i{transform-origin:left;animation:growx 1.1s var(--ease) .2s backwards}
+
+/* ---- hover: lift, 3D tilt (transform set by JS), specular glare ---- */
+.tilt{transition:transform .18s ease-out,box-shadow .3s var(--ease);will-change:transform}
+.tilt::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s ease;
+  background:radial-gradient(340px circle at var(--mx,50%) var(--my,0%),var(--glare),transparent 60%)}
+@media (hover:hover){
+  .tilt:hover::after{opacity:1}
+  .tilt:hover{box-shadow:0 1px 0 var(--hi) inset,0 28px 56px var(--shade-up),0 6px 16px rgba(0,0,0,.08)!important}
+  .list .row:hover,.cand:hover{background:var(--row-hover)}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 18px var(--shade)}
+  .btn.primary:hover{box-shadow:0 1px 0 rgba(255,255,255,.45) inset,0 14px 28px rgba(0,122,255,.45)}
+  .chips-row button:hover,.pill:hover{transform:translateY(-1px)}
+  .tabbar button:not(.on):hover{color:var(--text)}
+}
+.chips-row button,.pill{transition:transform .2s var(--ease),background .2s,color .2s}
+.list .row,.cand{transition:background .15s ease;border-radius:12px}
+#app .card.list,.sheet .card.list{padding:6px 10px}
+.list .row{padding-left:6px;padding-right:6px}
+
+/* ---- KPI tiles: accent bar, coloured label, count-up ---- */
+.stat{overflow:hidden}
+.stat::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--ac,var(--blue));opacity:.95}
+.stat .l{text-transform:uppercase;letter-spacing:.07em;font-size:11px;font-weight:600;color:var(--ac);margin-top:7px}
+.stat .n{font-size:31px;letter-spacing:-.05em}
+.stat .dot,.ic{box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 3px 8px rgba(0,0,0,.2);background-image:linear-gradient(180deg,rgba(255,255,255,.35),rgba(255,255,255,0) 55%)}
+
+/* ---- hero with rings ---- */
+.hero{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 26px!important;margin-bottom:12px;overflow:hidden}
+.hero .kicker{font-size:11.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--blue)}
+.hero h3{font-size:34px;font-weight:700;letter-spacing:-.05em;line-height:1.05;margin:6px 0 10px;
+  background:linear-gradient(95deg,var(--text) 25%,var(--blue) 62%,var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:var(--muted);font-size:15px;line-height:1.5;margin:0;max-width:560px}
+.hchips{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.hchips span{font-size:12px;font-weight:500;padding:4px 11px;border-radius:99px;background:var(--fill)}
+.rings{display:flex;align-items:center;gap:20px;flex:none}
+.rings svg{width:150px;height:150px;transform:rotate(-90deg);flex:none;filter:drop-shadow(0 8px 14px rgba(0,0,0,.18))}
+.rtrack{fill:none;opacity:.17}
+.ring{fill:none;stroke-linecap:round;animation:ring 1.5s var(--ease) .25s backwards}
+@keyframes ring{from{stroke-dashoffset:var(--c)}}
+.rlegend{display:flex;flex-direction:column;gap:10px;min-width:150px}
+.rlegend div{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
+.rlegend i{width:9px;height:9px;border-radius:50%;flex:none}
+.rlegend b{margin-left:auto;padding-left:14px;color:var(--text);font-size:15px;font-variant-numeric:tabular-nums}
+@media (max-width:760px){.hero{flex-direction:column;align-items:flex-start}.hero h3{font-size:28px}.rings svg{width:118px;height:118px}}
+
+/* ---- buttons, inputs, avatars ---- */
+.btn{border-radius:99px;transition:transform .15s var(--ease),box-shadow .2s ease,background .2s}
+.btn.primary{background:linear-gradient(180deg,#3b9bff,#007aff);box-shadow:0 1px 0 rgba(255,255,255,.45) inset,0 8px 18px rgba(0,122,255,.32)}
+.btn:active{transform:scale(.96)}
+.inp,.search{transition:box-shadow .2s ease,background .2s}
+.search:focus-within{box-shadow:0 0 0 3px rgba(10,132,255,.25)}
+.av{box-shadow:0 1px 0 rgba(255,255,255,.45) inset,0 4px 10px rgba(0,0,0,.2);background-image:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 60%)}
+.dropicon{animation:float 4s ease-in-out infinite;transition:transform .3s var(--spring)}
+@keyframes float{50%{transform:translateY(-5px)}}
+.drop.over .dropicon{animation:none;transform:scale(1.15)}
+
+/* ---- tab bar: sliding glass pill ---- */
+.tabbar .glider{position:absolute;top:5px;bottom:5px;left:0;width:0;border-radius:99px;background:var(--fill2);
+  box-shadow:0 1px 0 var(--hi) inset,0 2px 8px rgba(0,0,0,.06);transition:transform .5s var(--spring),width .5s var(--spring);z-index:0}
+.tabbar button{position:relative;z-index:1}
+.tabbar button.on{background:none}
+.tabbar button svg{transition:transform .4s var(--spring)}
+.tabbar button.on svg{transform:translateY(-1px) scale(1.1)}
+
+/* ---- iOS sheet: page recedes behind it ---- */
+main{transition:transform .5s var(--spring),opacity .5s var(--spring);transform-origin:50% 0}
+body.sheet-open main{transform:scale(.965) translateY(8px);opacity:.7}
+.scrim{backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.sheet{box-shadow:0 -10px 50px rgba(0,0,0,.25),0 0 0 .5px var(--edge)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.01ms!important}
+}
+@media print{body::before,body::after{display:none!important}}
