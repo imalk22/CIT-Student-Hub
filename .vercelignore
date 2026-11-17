@@ -1,0 +1,12 @@
+# Vercel hosts only the static web app. The local server (PDFs, email, private data files) runs with `npm start` on your own computer.
+server.js
+package.json
+package-lock.json
+node_modules
+data-files
+outbox
+ref
+.env
+.env.example
+_test*
+README.md
