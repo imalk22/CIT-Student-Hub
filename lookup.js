@@ -211,6 +211,24 @@ function subjectState(s, level, subject) {
   if (passed) { st = "pass"; label = "Passed"; } else if (ex) { st = "ex"; label = ex.status; } else if (pc) { st = "pass"; label = "Completed"; }
   return { st, label, best, tries, last: rs.at(-1) };
 }
+/* "Exam index · Analyst 1 · Jan 2025" — which exam an index number belongs to.
+   Uses the exam it was saved with (results imports / admission cards), otherwise reads level + year from the number. */
+function indexLabel(s, idx) {
+  const sit = s.sittings.find(x => x.index === idx);
+  if (sit) return `Exam index · ${sit.level} · ${sit.session.replace(/^.*?-\s*/, "") || sit.session}`;
+  const ex = (DB.exams || []).find(e => e.candidates.some(c => c.index === idx));
+  const t = String(idx).toUpperCase().replace(/\s+/g, "");
+  const CODES = { AP: "Application", A1: "Analyst 1", AN1: "Analyst 1", AL1: "Analyst 1", A2: "Analyst 2", AN2: "Analyst 2", AL2: "Analyst 2", AD: "Advisory" };
+  let m = t.match(/^(\d{2})\/(AP|AN1|AN2|AL1|AL2|A1|A2|AD)\//) || t.match(/^(AP|AN1|AN2|AL1|AL2|A1|A2|AD)(\d{2})\d+$/);
+  let level = "", year = "";
+  if (m) { if (/^\d/.test(m[1])) { year = m[1]; level = CODES[m[2]]; } else { level = CODES[m[1]]; year = m[2]; } }
+  if (ex) return `Exam index · ${ex.level}${year ? " · 20" + year : ""} · admission card`;
+  // the only sitting at that level in that year → name it
+  const cand = s.sittings.filter(x => (!level || x.level === level) && (!year || String(x.date || "").startsWith("20" + year)));
+  const uniq = [...new Set(cand.map(x => x.session))];
+  if (uniq.length === 1) return `Exam index · ${level || cand[0].level} · ${uniq[0].replace(/^.*?-\s*/, "")}`;
+  return `Exam index${level ? " · " + level : ""}${year ? " · 20" + year : ""}`;
+}
 function renderProfile(s) {
   const ct = s.contact || {}, m = currentLevel(s), ads = admissionsFor(s);
   const hue = color(s.name);
@@ -244,7 +262,7 @@ function renderProfile(s) {
         <div class="pass-id">
           <h1 class="pname">${esc(s.name)}</h1>
           ${ct.initials ? `<div class="pinit">${esc((ct.title ? ct.title + " " : "") + ct.initials)}</div>` : ""}
-          <div class="pnums"><span class="num" data-copy="${esc(s.id)}">${I.id}${esc(s.id)}</span>${s.index_nos.slice(-3).reverse().map(i => `<span class="num ghost" data-copy="${esc(i)}">${esc(i)}</span>`).join("")}</div>
+          <div class="pnums"><span class="num lbl" data-copy="${esc(s.id)}" title="Student number — given at registration, never changes. Click to copy."><small>Student no</small><span>${I.id}${esc(s.id)}</span></span>${s.index_nos.slice().reverse().map(i => `<span class="num ghost lbl" data-copy="${esc(i)}" title="Exam index number — a new one for each exam. Click to copy."><small>${esc(indexLabel(s, i))}</small><span>${esc(i)}</span></span>`).join("")}</div>
         </div>
       </div>
       <div class="answer"><div class="ans-k">Quick answer</div><div class="ans-t">${esc(answerLine(s))}</div>

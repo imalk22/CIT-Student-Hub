@@ -124,7 +124,7 @@ Open the standing page from the **Member standing** card on the Members tab, or 
 
 ## Xero setup (Finance page)
 
-The **Finance** page (card icon at the top, or *Finance · Xero* in the sidebar) shows outstanding invoices from Xero, matched to students and members. Each student and member page also gets a *Finance · Xero* card. The app only **reads** from Xero and never changes anything there. Syncing works only through `npm start`, not on the Vercel website. The last synced copy stays in the browser.
+The **Finance** page (card icon at the top, or *Finance · Xero* in the sidebar) shows outstanding invoices from Xero, matched to students and members. Student dues have their own **Dues** tab (Student outstanding), kept separate from exam results — the student profile shows results only. Member pages get a *Finance · Xero* card. The app only **reads** from Xero and never changes anything there. Syncing works only through `npm start`, not on the Vercel website. The last synced copy stays in the browser.
 
 **1. Create the Xero app** (once). Sign in at [developer.xero.com/app/manage](https://developer.xero.com/app/manage) with a login that can see the CIT organisation, then choose **New app**.
 - Integration type: **Web app**. App name: `CIT Student Hub`. Company or application URL: the private Vercel site, `https://cit-student-hub.vercel.app`. Xero only shows this on the consent screen, and the app doesn't use it.

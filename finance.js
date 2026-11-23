@@ -53,7 +53,6 @@ async function xeroPoll() {
     if (before != null && Math.round(before) !== Math.round(after)) toast(`Xero updated · outstanding now ${rs(after)}`);
     if (currentTab === "fin") renderFinance();
     else if (currentTab === "out" && typeof renderOutstanding === "function") renderOutstanding();
-    else if (!$("#v-profile").classList.contains("hide") && typeof refreshProfile === "function") refreshProfile();
     else if (!$("#v-mprof").classList.contains("hide") && mProfileNo) { const m = MEMBERS().find(x => x.no === mProfileNo); if (m) renderMemberProfile(m); }
   } catch { }
 }
@@ -106,8 +105,8 @@ function renderFinance() {
       $("#finCount").textContent = `${rows.length} ${finSeg === "student" ? "student" : "member"}${rows.length === 1 ? "" : "s"} · ${rs(sum(rows))}`;
       $("#finList").innerHTML = rows.slice(0, 300).map(p => `<details class="acrow"><summary><span class="t"><b>${esc(p.name)}</b><span>${esc(p.label)} · ${p.count} invoice${p.count === 1 ? "" : "s"}${p.oldest ? ` · oldest due ${fmtDay(p.oldest)}` : ""}</span></span>
         ${p.standing === "terminated" ? `<span class="chip c-red">Terminated</span>` : p.standing === "suspended" ? `<span class="chip c-orange">Suspended</span>` : ""}${p.overdue ? `<span class="chip c-orange">${rs(p.overdue)} overdue</span>` : ""}<span class="stamt">${rs(p.due)}</span></summary>
-        <div class="acdet">${p.invoices.map(invRow).join("")}<button class="link" data-k="${esc(p.kind)}" data-key="${esc(p.key)}">Open ${p.kind === "student" ? "profile" : "member"} ›</button></div></details>`).join("") || `<div class="empty">Nothing outstanding.</div>`;
-      $$("#finList [data-key]").forEach(b => b.onclick = () => b.dataset.k === "student" ? openProfile(b.dataset.key) : openMember(b.dataset.key));
+        <div class="acdet">${p.invoices.map(invRow).join("")}${p.kind === "member" ? `<button class="link" data-key="${esc(p.key)}">Open member ›</button>` : ""}</div></details>`).join("") || `<div class="empty">Nothing outstanding.</div>`;
+      $$("#finList [data-key]").forEach(b => b.onclick = () => openMember(b.dataset.key));
     } else {
       const rows = F.unmatched.filter(i => !q || norm(i.contact.name + " " + i.number + " " + i.reference + " " + i.contact.accountNumber).includes(q)).sort((a, b) => b.due - a.due);
       $("#finCount").textContent = `${rows.length} invoice${rows.length === 1 ? "" : "s"} · ${rs(sum(rows))} — add the student / membership no to the Xero contact's account number to match them`;
@@ -143,12 +142,7 @@ function financeCard(kind, key) {
       ${g.invoices.map(i => `<div class="xinv ${i.late ? "late" : ""}"><span><b>${esc(i.number || "Invoice")}</b>${i.reference ? " · " + esc(i.reference) : ""}<small>${esc(i.lines?.[0] || "")}</small></span><span class="muted">${i.dueDate ? "due " + fmtDay(i.dueDate) : fmtDay(i.date)}</span><b class="${i.late ? "owe" : ""}">${rs(i.due)}</b></div>`).join("")}`
       : `<div class="xtot"><b class="ok">Rs 0</b><span>no unpaid invoices in Xero</span></div>`}</div>`;
 }
-const _renderProfileF = renderProfile;
-renderProfile = function (s) {
-  _renderProfileF(s);
-  const html = financeCard("student", s.id);
-  if (html) $("#v-profile .card.pass")?.insertAdjacentHTML("afterend", html);
-};
+// Student money is kept on the Dues tab only — the student profile is for exam results and is not mixed with dues.
 const _renderMemberProfileF = renderMemberProfile;
 renderMemberProfile = function (m) {
   _renderMemberProfileF(m);

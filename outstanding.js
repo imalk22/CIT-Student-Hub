@@ -2,7 +2,7 @@
    Combines unpaid Xero invoices (course fees, exam fees … whatever is invoiced) with overdue student renewals
    worked out from the renewal files. Click a student to open their profile. */
 "use strict";
-let outF = "all", outLevel = "All", outSort = "due";
+let outF = "all", outSort = "due";
 
 function studentDues() {
   const today = new Date(), d90 = new Date(today - 90 * 864e5).toISOString().slice(0, 10);
@@ -14,14 +14,14 @@ function studentDues() {
     const xd = x?.due || 0, rd = ren?.amount || 0;
     if (!xd && !rd) continue;
     out.push({ s, x, ren, xd, rd, total: xd + rd, late90: x ? x.invoices.filter(i => i.dueDate && i.dueDate < d90).reduce((a, i) => a + i.due, 0) : 0,
-      oldest: x?.oldest || "", level: (typeof currentLevel === "function" ? currentLevel(s)?.level : "") || "" });
+      oldest: x?.oldest || "" });
   }
   // student nos found in Xero that aren't in the app's student records yet
   const F = typeof finIndex === "function" ? finIndex() : null;
   if (F) for (const g of F.byKey.values()) {
     if (g.kind !== "student" || !g.unknown) continue;
     const s = { id: g.key, name: g.contactName || g.key, index_nos: [], contact: {} };
-    out.push({ s, x: g, ren: null, xd: g.due, rd: 0, total: g.due, unknown: true, oldest: g.oldest || "", level: "",
+    out.push({ s, x: g, ren: null, xd: g.due, rd: 0, total: g.due, unknown: true, oldest: g.oldest || "",
       late90: g.invoices.filter(i => i.dueDate && i.dueDate < d90).reduce((a, i) => a + i.due, 0) });
   }
   return out;
@@ -34,7 +34,6 @@ function renderOutstanding() {
   const all = studentDues(), X = DB.xero, S = XSTATUS || {};
   const sum = (xs, k) => xs.reduce((a, x) => a + x[k], 0);
   const withX = all.filter(d => d.xd), withR = all.filter(d => d.rd), late = all.filter(d => d.late90);
-  const levels = ["All", ...LEVELS.filter(l => all.some(d => d.level === l))];
   const src = [
     X ? `Xero synced ${ago(X.syncedAt)}` : "Xero not synced yet",
     DB.renewals?.length ? "renewals from the renewal files" : "no renewal files imported",
@@ -50,51 +49,52 @@ function renderOutstanding() {
       <div class="card kpi" style="--ac:var(--orange)"><div class="kl">Over 90 days late</div><div class="kr"><div class="kv">${rs(sum(late, "late90"))}</div></div><div class="kn">${plural(late.length, "student")} · Xero invoices</div></div>
     </div>
     <div class="spotbox mspot" style="margin-top:14px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="outq" type="search" placeholder="Find a student — name, student no, index no or invoice" autocomplete="off" spellcheck="false"></div>
+      <input id="outq" type="search" placeholder="Find a student — name, student no or invoice no" autocomplete="off" spellcheck="false"></div>
     <div class="chips-row" id="outChips" style="margin-top:12px">${[["all", "All owing"], ["xero", "Xero invoices"], ["renewal", "Renewal overdue"], ["late", "Over 90 days"]].map(([k, t]) => `<button data-f="${k}" class="${k === outF ? "on" : ""}">${t}</button>`).join("")}</div>
     <div class="listhead"><span id="outCount"></span><span style="display:flex;gap:8px">
-      <select class="inp" id="outLevel" style="width:auto">${levels.map(l => `<option ${l === outLevel ? "selected" : ""} value="${l}">${l === "All" ? "All levels" : l}</option>`).join("")}</select>
       <select class="inp" id="outSort" style="width:auto"><option value="due">Highest owed</option><option value="oldest">Oldest due first</option><option value="name">Name</option></select></span></div>
     <div class="card list" id="outList"></div>`;
   $("#outSort").value = outSort; $("#outq").value = keepQ;
   const filtered = () => {
     const q = norm($("#outq").value);
     return all.filter(d => (outF === "all" || (outF === "xero" && d.xd) || (outF === "renewal" && d.rd) || (outF === "late" && d.late90))
-      && (outLevel === "All" || d.level === outLevel)
-      && (!q || norm(d.s.name + " " + d.s.id + " " + d.s.index_nos.join(" ") + " " + (d.x?.invoices || []).map(i => i.number + " " + i.reference).join(" ")).includes(q)))
+      && (!q || norm(d.s.name + " " + d.s.id + " " + (d.x?.invoices || []).map(i => i.number + " " + i.reference).join(" ")).includes(q)))
       .sort({ due: (a, b) => b.total - a.total, oldest: (a, b) => (a.oldest || "9") .localeCompare(b.oldest || "9") || b.total - a.total, name: (a, b) => a.s.name.localeCompare(b.s.name) }[outSort]);
   };
   const draw = () => {
     const rows = filtered();
     $("#outCount").textContent = `${rows.length} student${rows.length === 1 ? "" : "s"} · ${rs(sum(rows, "total"))}`;
     $("#outList").innerHTML = rows.slice(0, 300).map(d => `<button class="row action outrow" data-id="${esc(d.s.id)}">
-      <span class="t"><b>${esc(d.s.name)}</b><span>${esc(d.s.id)}${d.level ? " · " + esc(d.level) : ""}${d.oldest ? ` · oldest due ${fmtDay(d.oldest)}` : ""}</span>
+      <span class="t"><b>${esc(d.s.name)}</b><span>${esc(d.s.id)}${d.oldest ? ` · oldest due ${fmtDay(d.oldest)}` : ""}</span>
         <span class="outchips">${d.unknown ? `<span class="chip c-gray">Not in student records</span>` : ""}${d.xd ? `<span class="chip c-blue">Xero ${rs(d.xd)} · ${d.x.count} inv</span>` : ""}${d.late90 ? `<span class="chip c-orange">${rs(d.late90)} 90+ days</span>` : ""}${d.rd ? `<span class="chip c-purple">Renewal ${rs(d.rd)} · ${esc(d.ren.due.join(", "))}</span>` : ""}</span></span>
       <span class="stamt">${rs(d.total)}</span><span class="chev">›</span></button>`).join("")
       + (rows.length > 300 ? `<div class="empty">${rows.length - 300} more — search to narrow down</div>` : "") || ($("#outq").value.trim()
         ? `<div class="empty">Nothing owed by “${esc($("#outq").value.trim())}” in the synced data.<br>If Xero shows an unpaid invoice: press <b>Sync Xero</b>, make sure the invoice is approved (not Draft), and check Finance → <button class="link" id="outNm">Not matched</button> — the student no may need to go in the contact's Account number.</div>`
-        : `<div class="empty">No students owe anything${outF !== "all" || outLevel !== "All" ? " with these filters" : ""}.</div>`);
+        : `<div class="empty">No students owe anything${outF !== "all" ? " with this filter" : ""}.</div>`);
     if ($("#outNm")) $("#outNm").onclick = () => { finSeg = "none"; tab("fin"); };
     $$("#outList [data-id]").forEach(b => b.onclick = () => openDue(rows.find(d => d.s.id === b.dataset.id)));
   };
-  const openDue = d => {
+  const openDue = d => {   // dues only — the exam-results profile is a separate thing
     if (!d) return;
-    if (!d.unknown) return openProfile(d.s.id);
-    openSheet(`<div class="bar-top"><div><b style="font-size:17px">${esc(d.s.name)}</b><div class="muted">${esc(d.s.id)} · from Xero</div></div>${closeBtn}</div>
-      <div class="note">This student number is on Xero invoices but isn't in the app's student records yet (no results or registration imported). Check the number in Xero, or import the registration file on the Data tab.</div>
-      <div class="card xcard"><div class="xtot"><b class="owe">${rs(d.xd)}</b><span>outstanding on ${d.x.count} invoice${d.x.count === 1 ? "" : "s"}</span></div>
-      ${d.x.invoices.map(i => `<div class="xinv ${i.late ? "late" : ""}"><span><b>${esc(i.number || "Invoice")}</b>${i.reference ? " · " + esc(i.reference) : ""}<small>${esc(i.lines?.[0] || "")}</small></span><span class="muted">${i.dueDate ? "due " + fmtDay(i.dueDate) : fmtDay(i.date)}</span><b class="${i.late ? "owe" : ""}">${rs(i.due)}</b></div>`).join("")}</div>`);
+    const ct = d.s.contact || {}, inv = d.x?.invoices || [];
+    openSheet(`<div class="bar-top"><div><b style="font-size:17px">${esc(d.s.name)}</b><div class="muted">${esc(d.s.id)} · student dues</div></div>${closeBtn}</div>
+      ${d.unknown ? `<div class="note">This student number is on Xero invoices but isn't in the app's student list yet. Check the number in Xero.</div>` : ""}
+      <div class="imp-sum"><div><b class="owe">${rs(d.total)}</b><span>total owed</span></div><div><b>${rs(d.xd)}</b><span>Xero invoices</span></div><div><b>${rs(d.rd)}</b><span>renewal overdue</span></div></div>
+      ${inv.length ? `<div class="card xcard"><div class="sec-h"><h2>Xero invoices</h2><span class="muted">${DB.xero ? "synced " + ago(DB.xero.syncedAt) : ""}</span></div>
+        ${inv.map(i => `<div class="xinv ${i.late ? "late" : ""}"><span><b>${esc(i.number || "Invoice")}</b>${i.reference ? " · " + esc(i.reference) : ""}<small>${esc(i.lines?.[0] || "")}</small></span><span class="muted">${i.dueDate ? "due " + fmtDay(i.dueDate) : fmtDay(i.date)}</span><b class="${i.late ? "owe" : ""}">${rs(i.due)}</b></div>`).join("")}</div>` : ""}
+      ${d.ren ? `<div class="card xcard"><div class="sec-h"><h2>Student renewal</h2></div>
+        <div class="xinv late"><span><b>Renewal overdue</b><small>Years: ${esc(d.ren.due.join(", "))}${d.ren.upto ? ` · renewed up to ${d.ren.upto}` : ""}</small></span><span class="muted">${d.ren.lastPaid ? "last paid " + fmtDay(d.ren.lastPaid) : ""}</span><b class="owe">${rs(d.ren.amount)}</b></div></div>` : ""}
+      ${ct.email || ct.phone ? `<div class="card xcard"><div class="sec-h"><h2>Contact</h2></div><div class="muted" style="padding:2px 0 8px">${[ct.email, ct.phone].filter(Boolean).map(esc).join(" · ")}</div></div>` : ""}`);
   };
   draw();
   $("#outq").oninput = draw;
   $("#outq").onkeydown = e => { if (e.key === "Enter") $("#outList [data-id]")?.click(); };
   $("#outChips").onclick = e => { const b = e.target.closest("[data-f]"); if (b) { outF = b.dataset.f; $$("#outChips button").forEach(x => x.classList.toggle("on", x === b)); draw(); } };
-  $("#outLevel").onchange = e => { outLevel = e.target.value; draw(); };
   $("#outSort").onchange = e => { outSort = e.target.value; draw(); };
   if ($("#outFin")) $("#outFin").onclick = () => tab("fin");
   if ($("#outSync")) $("#outSync").onclick = async () => { await xeroSync(); if (currentTab === "out") renderOutstanding(); };
   $("#outExport").onclick = () => {
-    const rows = filtered().map(d => ({ "Student no": d.s.id, Name: d.s.name, Level: d.level, Email: d.s.contact?.email || "", Phone: d.s.contact?.phone || "",
+    const rows = filtered().map(d => ({ "Student no": d.s.id, Name: d.s.name, Email: d.s.contact?.email || "", Phone: d.s.contact?.phone || "",
       "Xero due": d.xd, "Xero invoices": (d.x?.invoices || []).map(i => i.number).join(", "), "Oldest due date": d.oldest, "Over 90 days": d.late90,
       "Renewal due": d.rd, "Renewal years": d.ren ? d.ren.due.join(", ") : "", "Total owed": d.total }));
     if (!rows.length) return toast("Nothing to export");

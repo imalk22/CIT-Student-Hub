@@ -452,3 +452,8 @@ a.btn{text-decoration:none}
 /* ---------- student outstanding ---------- */
 .outrow .t span.outchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;white-space:normal;overflow:visible}
 .outchips .chip{font-size:11.5px}
+
+/* labelled number chips on the profile */
+.num.lbl{flex-direction:column;align-items:flex-start;gap:1px;border-radius:12px;padding:5px 11px 6px;line-height:1.15}
+.num.lbl small{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;opacity:.7}
+.num.lbl>span{display:inline-flex;align-items:center;gap:6px}
