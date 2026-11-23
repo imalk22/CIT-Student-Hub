@@ -547,9 +547,7 @@ function renderEditor() {
 
     <div class="stickyfoot">
       <button class="btn danger" id="eDel">Delete</button><span style="flex:1"></span>
-      <button class="btn" id="eZip" ${e.candidates.length ? "" : "disabled"} title="One PDF per student, named by student number, in one ZIP"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download all (${e.candidates.length})</button>
-      <button class="btn" id="ePrint" ${e.candidates.length ? "" : "disabled"} title="All cards in one PDF">One PDF</button>
-      <button class="btn" id="eReview" ${e.candidates.length ? "" : "disabled"}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>Review</button>
+      <button class="btn" id="eZip" ${e.candidates.length ? "" : "disabled"} title="A separate PDF for every student, named by student number"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download all (${e.candidates.length})</button>      <button class="btn" id="eReview" ${e.candidates.length ? "" : "disabled"}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>Review</button>
       <button class="btn primary" id="eSend" ${countState(e, "approved") ? "" : "disabled"}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg>Send ${countState(e, "approved") || ""}</button>
     </div>`;
   renderCands();
@@ -653,7 +651,6 @@ function bindEditor() {
     if (!confirm("Delete this exam and its candidate list?")) return;
     DB.exams = DB.exams.filter(x => x !== e); cur = null; save(); renderAdmissions();
   };
-  $("#ePrint").onclick = () => pdfDownload(e.candidates.flatMap(c => cardPages(e, c)), `Admission cards - ${e.level}.pdf`);
   $("#eZip").onclick = () => downloadAllCards(e);
 }
 function autoAdd() {
