@@ -99,7 +99,12 @@ module.exports = function xero({ ROOT, PORT, send }) {
   let syncing = null, lastError = "";
   async function refresh() {
     if (!tok?.refresh) return cache?.data;
-    if (!syncing) syncing = outstanding().then(data => { cache = { at: Date.now(), data }; lastError = ""; return data; })
+    if (!syncing) syncing = outstanding().then(data => {
+      cache = { at: Date.now(), data }; lastError = "";
+      const total = data.invoices.reduce((s, i) => s + i.due, 0);
+      console.log(`  Xero: synced ${new Date().toLocaleTimeString()} · ${data.invoices.length} unpaid invoices · Rs ${Math.round(total).toLocaleString("en-LK")} outstanding`);
+      return data;
+    })
       .catch(e => { lastError = e.message; console.error("[xero] auto-sync:", e.message); throw e; }).finally(() => { syncing = null; });
     return syncing;
   }
