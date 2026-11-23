@@ -65,7 +65,7 @@ function finPeople() {
   const stu = new Map(DB.students.map(s => [s.id, s])), mem = new Map((typeof MEMBERS === "function" ? MEMBERS() : []).map(m => [m.no, m]));
   return [...F.byKey.values()].map(g => {
     const p = g.kind === "student" ? stu.get(g.key) : mem.get(g.key);
-    return { ...g, name: p ? ((p.title ? p.title + " " : "") + p.name) : g.key, label: g.kind === "student" ? g.key : MC.prettyNo(g.key) + " · " + (p?.type || "Member"),
+    return { ...g, name: p ? ((p.title ? p.title + " " : "") + p.name) : (g.contactName || g.key) + (g.unknown ? " (not in records)" : ""), label: g.kind === "student" ? g.key : MC.prettyNo(g.key) + " · " + (p?.type || "Member"),
       standing: g.kind === "member" && p ? acct(p).standing.state : "" };
   });
 }

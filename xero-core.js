@@ -11,8 +11,12 @@
   "use strict";
   const T = v => String(v ?? "").replace(/\s+/g, " ").trim();
   const norm = s => T(s).toLowerCase().replace(/^(mr|mrs|ms|miss|dr|prof|rev)\.?\s+/i, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
-  const REG = /\b(\d{4}\/[A-Z0-9]{1,4}\/\d{3,5})\b/gi;
-  const IDX = /\b(\d{2}\/[A-Z0-9]{1,4}\/\d{1,3}\/\d{3,5})\b/gi;
+  // student nos: 2024/A1/3236, 2023/AN1/B1/0123, 2024/A1E/0045 … ; index nos: 25/AP/01/0117
+  // Xero text is normalised first ("2024 / a1 - 3236" → "2024/A1/3236") and the last part compared without leading zeros.
+  const REG = /(?:^|[^0-9A-Z/])(\d{4}(?:\/[A-Z0-9]{1,4}){1,2}\/\d{3,5})(?![0-9/])/g;
+  const IDX = /(?:^|[^0-9A-Z/])(\d{2}\/[A-Z0-9]{1,4}\/\d{1,3}\/\d{2,5})(?![0-9/])/g;
+  const canon = s => T(s).toUpperCase().replace(/\s*[/\-–]\s*/g, "/");
+  const idKey = s => { const p = canon(s).split("/"); if (p.length > 1) p[p.length - 1] = String(+p[p.length - 1] || p[p.length - 1]); return p.join("/"); };
   const MEM = /(?:^|[^A-Z0-9/])(F|A)\s?[-–.]?\s?0*(\d{1,4})(?![\d/])/gi;
   const memNo = (l, d) => l.toUpperCase() + String(+d).padStart(3, "0");
 
@@ -21,8 +25,8 @@
     const addMulti = (map, k, v) => { if (!k) return; if (!map.has(k)) map.set(k, []); const a = map.get(k); if (!a.some(x => x.kind === v.kind && x.key === v.key)) a.push(v); };
     for (const s of students) {
       const ref = { kind: "student", key: s.id };
-      sid.set(String(s.id).toUpperCase(), ref);
-      for (const i of s.index_nos || []) idx.set(String(i).toUpperCase(), ref);
+      sid.set(idKey(s.id), ref);
+      for (const i of s.index_nos || []) idx.set(idKey(i), ref);
       for (const e of String(s.contact?.email || s.email || "").toLowerCase().split(/[;,\s]+/).filter(x => x.includes("@"))) addMulti(email, e, ref);
       addMulti(name, norm(s.name), ref);
     }
@@ -40,14 +44,17 @@
     const c = inv.contact || {};
     const strong = [c.accountNumber, c.contactNumber, c.name, inv.reference].map(T).join(" | ");
     const all = strong + " | " + (inv.lines || []).join(" | ");
-    for (const m of all.matchAll(REG)) { const r = I.sid.get(m[1].toUpperCase()); if (r) return { ...r, how: "student no" }; }
-    for (const m of all.matchAll(IDX)) { const r = I.idx.get(m[1].toUpperCase()); if (r) return { ...r, how: "index no" }; }
+    const allC = canon(all), regs = [...allC.matchAll(REG)].map(m => m[1]);
+    for (const g of regs) { const r = I.sid.get(idKey(g)); if (r) return { ...r, how: "student no" }; }
+    for (const m of allC.matchAll(IDX)) { const r = I.idx.get(idKey(m[1])); if (r) return { ...r, how: "index no" }; }
     const memText = strong + " | " + (inv.lines || []).filter(l => /member|subscri/i.test(l)).join(" | ");
     for (const m of memText.matchAll(MEM)) { const r = I.mem.get(memNo(m[1], m[2])); if (r) return { ...r, how: "membership no" }; }
     const em = T(c.email).toLowerCase();
     if (em && I.email.get(em)?.length === 1) return { ...I.email.get(em)[0], how: "email" };
     const nm = norm(c.name);
     if (nm && I.name.get(nm)?.length === 1) return { ...I.name.get(nm)[0], how: "name" };
+    // a student no that isn't in the app's records yet — still a student who owes, so keep it (no profile to open)
+    if (regs.length) return { kind: "student", key: regs[0], how: "student no (not in records)", unknown: true, contactName: T(c.name) };
     return null;
   }
 
@@ -60,7 +67,7 @@
       const m = matchInvoice(inv, I);
       if (!m) { unmatched.push({ ...inv, late }); continue; }
       const k = m.kind + ":" + m.key;
-      const g = byKey.get(k) || { kind: m.kind, key: m.key, due: 0, overdue: 0, count: 0, oldest: "", invoices: [], how: new Set() };
+      const g = byKey.get(k) || { kind: m.kind, key: m.key, unknown: !!m.unknown, contactName: m.contactName || "", due: 0, overdue: 0, count: 0, oldest: "", invoices: [], how: new Set() };
       g.due += inv.due; if (late) g.overdue += inv.due; g.count++; g.how.add(m.how);
       if (inv.dueDate && (!g.oldest || inv.dueDate < g.oldest)) g.oldest = inv.dueDate;
       g.invoices.push({ ...inv, late, how: m.how });

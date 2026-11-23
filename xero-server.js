@@ -75,7 +75,7 @@ module.exports = function xero({ ROOT, PORT, send }) {
     }
     const ids = [...new Set(invoices.map(i => i.Contact?.ContactID).filter(Boolean))], contacts = new Map();
     for (let k = 0; k < ids.length; k += 40) {
-      const j = await api(`Contacts?IDs=${ids.slice(k, k + 40).join(",")}&summaryOnly=true`);
+      const j = await api(`Contacts?IDs=${ids.slice(k, k + 40).join(",")}`);
       for (const c of j.Contacts || []) contacts.set(c.ContactID, c);
     }
     const day = s => String(s || "").slice(0, 10);

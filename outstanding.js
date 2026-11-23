@@ -16,6 +16,14 @@ function studentDues() {
     out.push({ s, x, ren, xd, rd, total: xd + rd, late90: x ? x.invoices.filter(i => i.dueDate && i.dueDate < d90).reduce((a, i) => a + i.due, 0) : 0,
       oldest: x?.oldest || "", level: (typeof currentLevel === "function" ? currentLevel(s)?.level : "") || "" });
   }
+  // student nos found in Xero that aren't in the app's student records yet
+  const F = typeof finIndex === "function" ? finIndex() : null;
+  if (F) for (const g of F.byKey.values()) {
+    if (g.kind !== "student" || !g.unknown) continue;
+    const s = { id: g.key, name: g.contactName || g.key, index_nos: [], contact: {} };
+    out.push({ s, x: g, ren: null, xd: g.due, rd: 0, total: g.due, unknown: true, oldest: g.oldest || "", level: "",
+      late90: g.invoices.filter(i => i.dueDate && i.dueDate < d90).reduce((a, i) => a + i.due, 0) });
+  }
   return out;
 }
 
@@ -61,14 +69,25 @@ function renderOutstanding() {
     $("#outCount").textContent = `${rows.length} student${rows.length === 1 ? "" : "s"} · ${rs(sum(rows, "total"))}`;
     $("#outList").innerHTML = rows.slice(0, 300).map(d => `<button class="row action outrow" data-id="${esc(d.s.id)}">
       <span class="t"><b>${esc(d.s.name)}</b><span>${esc(d.s.id)}${d.level ? " · " + esc(d.level) : ""}${d.oldest ? ` · oldest due ${fmtDay(d.oldest)}` : ""}</span>
-        <span class="outchips">${d.xd ? `<span class="chip c-blue">Xero ${rs(d.xd)} · ${d.x.count} inv</span>` : ""}${d.late90 ? `<span class="chip c-orange">${rs(d.late90)} 90+ days</span>` : ""}${d.rd ? `<span class="chip c-purple">Renewal ${rs(d.rd)} · ${esc(d.ren.due.join(", "))}</span>` : ""}</span></span>
+        <span class="outchips">${d.unknown ? `<span class="chip c-gray">Not in student records</span>` : ""}${d.xd ? `<span class="chip c-blue">Xero ${rs(d.xd)} · ${d.x.count} inv</span>` : ""}${d.late90 ? `<span class="chip c-orange">${rs(d.late90)} 90+ days</span>` : ""}${d.rd ? `<span class="chip c-purple">Renewal ${rs(d.rd)} · ${esc(d.ren.due.join(", "))}</span>` : ""}</span></span>
       <span class="stamt">${rs(d.total)}</span><span class="chev">›</span></button>`).join("")
-      + (rows.length > 300 ? `<div class="empty">${rows.length - 300} more — search to narrow down</div>` : "") || `<div class="empty">No students owe anything${outF !== "all" || outLevel !== "All" ? " with these filters" : ""}.</div>`;
-    $$("#outList [data-id]").forEach(b => b.onclick = () => openProfile(b.dataset.id));
+      + (rows.length > 300 ? `<div class="empty">${rows.length - 300} more — search to narrow down</div>` : "") || ($("#outq").value.trim()
+        ? `<div class="empty">Nothing owed by “${esc($("#outq").value.trim())}” in the synced data.<br>If Xero shows an unpaid invoice: press <b>Sync Xero</b>, make sure the invoice is approved (not Draft), and check Finance → <button class="link" id="outNm">Not matched</button> — the student no may need to go in the contact's Account number.</div>`
+        : `<div class="empty">No students owe anything${outF !== "all" || outLevel !== "All" ? " with these filters" : ""}.</div>`);
+    if ($("#outNm")) $("#outNm").onclick = () => { finSeg = "none"; tab("fin"); };
+    $$("#outList [data-id]").forEach(b => b.onclick = () => openDue(rows.find(d => d.s.id === b.dataset.id)));
+  };
+  const openDue = d => {
+    if (!d) return;
+    if (!d.unknown) return openProfile(d.s.id);
+    openSheet(`<div class="bar-top"><div><b style="font-size:17px">${esc(d.s.name)}</b><div class="muted">${esc(d.s.id)} · from Xero</div></div>${closeBtn}</div>
+      <div class="note">This student number is on Xero invoices but isn't in the app's student records yet (no results or registration imported). Check the number in Xero, or import the registration file on the Data tab.</div>
+      <div class="card xcard"><div class="xtot"><b class="owe">${rs(d.xd)}</b><span>outstanding on ${d.x.count} invoice${d.x.count === 1 ? "" : "s"}</span></div>
+      ${d.x.invoices.map(i => `<div class="xinv ${i.late ? "late" : ""}"><span><b>${esc(i.number || "Invoice")}</b>${i.reference ? " · " + esc(i.reference) : ""}<small>${esc(i.lines?.[0] || "")}</small></span><span class="muted">${i.dueDate ? "due " + fmtDay(i.dueDate) : fmtDay(i.date)}</span><b class="${i.late ? "owe" : ""}">${rs(i.due)}</b></div>`).join("")}</div>`);
   };
   draw();
   $("#outq").oninput = draw;
-  $("#outq").onkeydown = e => { if (e.key === "Enter") { const f = $("#outList [data-id]"); if (f) openProfile(f.dataset.id); } };
+  $("#outq").onkeydown = e => { if (e.key === "Enter") $("#outList [data-id]")?.click(); };
   $("#outChips").onclick = e => { const b = e.target.closest("[data-f]"); if (b) { outF = b.dataset.f; $$("#outChips button").forEach(x => x.classList.toggle("on", x === b)); draw(); } };
   $("#outLevel").onchange = e => { outLevel = e.target.value; draw(); };
   $("#outSort").onchange = e => { outSort = e.target.value; draw(); };
