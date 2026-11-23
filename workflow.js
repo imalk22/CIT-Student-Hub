@@ -33,14 +33,14 @@ async function pdfDownload(pages, filename) {
 /* ---------------- candidate states ---------------- */
 const STATES = {
   draft: ["To review", "orange"], flagged: ["Flagged", "red"], approved: ["Approved", "blue"],
-  sent: ["Emailed", "green"], failed: ["Email failed", "red"],
+  sent: ["Emailed", "green"], failed: ["Email failed", "red"], prepared: ["Ready in Outlook", "purple"],
 };
 const countState = (e, st) => e.candidates.filter(c => (c.state || "draft") === st).length;
 const stateLabel = c => STATES[c.state || "draft"][0];
 const stateChip = c => `<span class="chip st c-${STATES[c.state || "draft"][1]}" title="${esc(c.note || c.error || "")}">${stateLabel(c)}${c.outdated ? " · changed" : ""}</span>`;
 function touched(c) {
   if ((c.state || "draft") === "draft") return false;
-  if (c.state === "sent") c.outdated = true;
+  if (c.state === "sent" || c.state === "prepared") c.outdated = true;
   c.state = "draft"; c.approvedBy = c.approvedAt = null; return true;
 }
 let changedT;
@@ -48,7 +48,7 @@ function cardChanged(e, quiet) {
   let n = 0;
   for (const c of e.candidates) {
     if (c.state === "approved" || c.state === "flagged" || c.state === "failed") { c.state = "draft"; c.approvedBy = null; n++; }
-    else if (c.state === "sent") c.outdated = true;
+    else if (c.state === "sent" || c.state === "prepared") c.outdated = true;
   }
   if (n) { save(); refreshPipeline(); clearTimeout(changedT); if (!quiet) changedT = setTimeout(() => toast(`The card changed — ${n} approval${n === 1 ? "" : "s"} need review again`), 600); }
 }
@@ -69,7 +69,7 @@ const passes = (e, c) => checks(e, c).every(([ok]) => ok);
 /* ---------------- pipeline UI in the editor ---------------- */
 function pipelineHtml(e) {
   const n = e.candidates.length, dated = e.subjects.filter(s => s.date).length;
-  const appr = countState(e, "approved") + countState(e, "sent"), sent = countState(e, "sent");
+  const appr = countState(e, "approved") + countState(e, "sent") + countState(e, "prepared"), sent = countState(e, "sent") + countState(e, "prepared");
   const steps = [
     ["cands", "Candidates", n ? `${n} added` : "Import or add", n > 0],
     ["time", "Timetable", `${dated}/${e.subjects.length} dated`, dated === e.subjects.length && dated > 0],
@@ -254,7 +254,7 @@ function reviewUI(e) {
   $("#sheet").dataset.mode = "review"; $("#sheet").classList.add("wide");
   const draw = () => {
     const L = list(); if (i >= L.length) i = Math.max(0, L.length - 1);
-    const done = countState(e, "approved") + countState(e, "sent");
+    const done = countState(e, "approved") + countState(e, "sent") + countState(e, "prepared");
     $("#rvSub").textContent = `${done} of ${e.candidates.length} approved · signed in as ${DB.settings.supervisor}`;
     $("#rvBar").style.width = (100 * done / e.candidates.length) + "%";
     const segs = [["draft", "To review"], ["flagged", "Flagged"], ["approved", "Approved"], ["all", "All"]];
@@ -351,6 +351,46 @@ function textToHtml(t) {
     ${esc(t).replace(/\n/g, "<br>")}</div>`;
 }
 let SENDING = null;
+/* How "Send" works (Email step):
+   outlook — makes an Outlook email for the student, PDF attached; Outlook opens it and YOU press Send (default)
+   mailto  — opens the email app with To/Subject/Message filled in; the PDF is downloaded to attach by hand
+   auto    — sends straight away through Microsoft 365 (only when it is set up) */
+const SEND_MODES = {
+  outlook: ["Open in Outlook", "Makes a ready email for each student with their PDF attached. Outlook opens it — check it and press Send."],
+  mailto: ["Email app link", "Opens your email app with the student, subject and message filled in. The PDF downloads — attach it, then press Send."],
+  auto: ["Send automatically", "Sends straight away from the Microsoft 365 mailbox. Nothing to press in Outlook."],
+};
+const sendMode = () => { const m = DB.settings.sendMode || "outlook"; return m === "auto" && !(SERVER && SERVER.mode !== "none") ? "outlook" : m; };
+const b64utf8 = str => { const bytes = new TextEncoder().encode(str); let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(bin); };
+const wrap76 = b => b.replace(/.{1,76}/g, "$&\r\n");
+/* an unsent email file: Outlook (Windows) opens it as a new message ready to send, with the PDF attached */
+function emlFile({ to, cc, subject, text, html, filename, pdfB64 }) {
+  const bd = "=_cit_" + Math.random().toString(36).slice(2), alt = bd + "_alt";
+  const L = ["X-Unsent: 1", `To: ${to}`, ...(cc ? [`Cc: ${cc}`] : []), `Subject: =?UTF-8?B?${b64utf8(subject)}?=`, "MIME-Version: 1.0", `Content-Type: multipart/mixed; boundary="${bd}"`, "",
+    `--${bd}`, `Content-Type: multipart/alternative; boundary="${alt}"`, "",
+    `--${alt}`, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrap76(b64utf8(text)),
+    `--${alt}`, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrap76(b64utf8(html)),
+    `--${alt}--`, "",
+    `--${bd}`, `Content-Type: application/pdf; name="${filename}"`, `Content-Disposition: attachment; filename="${filename}"`, "Content-Transfer-Encoding: base64", "", wrap76(pdfB64),
+    `--${bd}--`, ""];
+  return new Blob([L.join("\r\n")], { type: "message/rfc822" });
+}
+/* prepare the email for the student without sending it (Outlook draft, or email-app link) */
+async function prepareEmail(e, c, mode) {
+  const text = fillTemplate(e.emailBody, e, c), subject = fillTemplate(e.emailSubject, e, c), filename = cardFileName(c), to = c.email.trim();
+  const pdf = await cardPdfBlob(e, c);
+  if (mode === "mailto") {
+    download(filename, pdf);
+    const q = new URLSearchParams({ subject, body: text.slice(0, 1800) + (text.length > 1800 ? "…" : "") });
+    if (e.emailCc) q.set("cc", e.emailCc);
+    setTimeout(() => { location.href = `mailto:${encodeURIComponent(to)}?${q.toString().replace(/\+/g, "%20")}`; }, 300);
+  } else {
+    download(filename.replace(/\.pdf$/i, "") + " - email.eml", emlFile({ to, cc: e.emailCc, subject, text, html: textToHtml(text), filename, pdfB64: await blobToBase64(pdf) }));
+  }
+  Object.assign(c, { state: "prepared", preparedAt: Date.now(), preparedMode: mode, error: "", outdated: false, sentTo: to, sentFile: filename });
+  return { ok: true, mode };
+}
+
 /* email ONE candidate their card (PDF named by student number). Used by "Send" on each box and by "Send all". */
 async function sendOne(e, c) {
   const text = fillTemplate(e.emailBody, e, c), filename = cardFileName(c);
@@ -369,13 +409,16 @@ async function openSend(e) {
   await checkServer();
   e.emailSubject ||= DEFAULT_SUBJECT; e.emailBody ||= DEFAULT_BODY;
   let filter = "all", q = "";
-  const canSend = () => SERVER && SERVER.mode !== "none";
-  const live = () => SERVER?.mode !== "test";
+  const canAuto = () => SERVER && SERVER.mode !== "none";
+  const mode = () => sendMode();
+  const canSend = () => mode() !== "auto" || canAuto();
+  const live = () => mode() === "auto" && SERVER?.mode !== "test";
   const busyIds = new Set();
   const when = t => new Date(t).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const box = c => {
     const st = c.state || "draft", file = cardFileName(c), b = busyIds.has(c.id), mailOk = isEmail(c.email);
-    const sendLbl = st === "sent" ? "Resend" : st === "approved" || st === "failed" ? "Send" : "Approve & send";
+    const verb = mode() === "outlook" ? "Open in Outlook" : mode() === "mailto" ? "Open email" : "Send";
+    const sendLbl = (st === "sent" || st === "prepared") ? (mode() === "auto" ? "Resend" : verb + " again") : st === "approved" || st === "failed" ? verb : "Approve & " + verb.toLowerCase();
     return `<div class="sbox st-${st}" data-c="${esc(c.id)}">
       <div class="sb-top"><span class="dc-av" style="background:${color(c.name || "?")}">${esc(initials(c.name || "?") || "?")}</span>
         <span class="sb-id"><b>${esc(c.name || "No name")}</b><span class="dc-no">${esc(c.sid || "no student no")}</span></span>${stateChip(c)}</div>
@@ -385,31 +428,36 @@ async function openSend(e) {
         ${c.emailFromRecords && c.emailFromRecords === c.email ? `<div><small></small><span class="fromrec">from student records (not in the Excel)</span></div>` : ""}
       </div>
       <div class="sb-file">📄 <span>${esc(file)}</span></div>
-      ${st === "sent" ? `<div class="sb-note ok">✓ Emailed ${when(c.sentAt)}${c.sentMode === "test" ? " (test — saved to outbox)" : ""} to ${esc(c.sentTo || c.email)}</div>` : ""}
+      ${st === "sent" ? `<div class="sb-note ok">✓ ${c.sentMode === "manual" ? "Marked as sent" : "Emailed"} ${when(c.sentAt)}${c.sentMode === "test" ? " (test — saved to outbox)" : ""} to ${esc(c.sentTo || c.email)}</div>` : ""}
+      ${st === "prepared" ? `<div class="sb-note prep">${c.preparedMode === "mailto" ? "Opened in the email app" : "Outlook email made"} ${when(c.preparedAt)} — press Send there. <button class="link" data-a="mark">Mark as sent</button></div>` : ""}
       ${st === "failed" ? `<div class="sb-note bad">! ${esc(c.error || "Failed")}</div>` : ""}
       ${st === "flagged" ? `<div class="sb-note bad">Flagged${c.note ? ": " + esc(c.note) : ""}</div>` : ""}
       <div class="sb-acts">
         <button class="btn small" data-a="view">View</button>
         <button class="btn small" data-a="pdf">PDF</button>
         <span style="flex:1"></span>
-        <button class="btn small primary" data-a="send" ${b || !mailOk || !canSend() || st === "flagged" ? "disabled" : ""}>${b ? '<span class="spin"></span> Sending…' : sendLbl}</button>
+        <button class="btn small primary" data-a="send" ${b || !mailOk || !canSend() || st === "flagged" ? "disabled" : ""}>${b ? `<span class="spin"></span> ${mode() === "auto" ? "Sending…" : "Making…"}` : sendLbl}</button>
       </div>
     </div>`;
   };
   const draw = () => {
     const ready = e.candidates.filter(c => c.state === "approved"), noMail = ready.filter(c => !isEmail(c.email)).length;
-    const failed = countState(e, "failed"), sent = countState(e, "sent"), waiting = countState(e, "draft") + countState(e, "flagged");
+    const failed = countState(e, "failed"), sent = countState(e, "sent"), prepared = countState(e, "prepared"), waiting = countState(e, "draft") + countState(e, "flagged");
     const sample = ready[0] || e.candidates[0];
-    const srv = SERVER?.site === "vercel" && SERVER.mode === "none" ? `<div class="srv bad"><b>Email isn't set up on the website yet.</b> Add the Microsoft 365 settings (<code>MS_TENANT_ID</code>, <code>MS_CLIENT_ID</code>, <code>MS_CLIENT_SECRET</code>, <code>MS_SENDER</code>) in Vercel → Settings → Environment Variables and redeploy. You can still view and download every PDF.</div>`
+    const srvAuto = SERVER?.site === "vercel" && SERVER.mode === "none" ? `<div class="srv bad"><b>Email isn't set up on the website yet.</b> Add the Microsoft 365 settings (<code>MS_TENANT_ID</code>, <code>MS_CLIENT_ID</code>, <code>MS_CLIENT_SECRET</code>, <code>MS_SENDER</code>) in Vercel → Settings → Environment Variables and redeploy. You can still view and download every PDF.</div>`
       : !SERVER ? `<div class="srv bad"><b>Email server is not running.</b> Open a terminal in the student-hub folder and run <code>npm start</code>, then reopen this page from http://localhost:5173.</div>`
       : SERVER.mode === "test" ? `<div class="srv test"><b>Test mode.</b> Emails are saved to the <code>outbox</code> folder with the PDF attached. Nothing reaches students until email is set up.</div>`
       : `<div class="srv ok"><b>Ready to send</b> from ${esc(SERVER.from)}${SERVER.mode === "graph" ? " via Microsoft 365 — copies are kept in its Sent Items" : ""}.</div>`;
+    const how = `<div class="sendhow"><small class="k" style="margin:0 0 6px">How to send</small>
+        <div class="seg" id="sMode">${Object.entries(SEND_MODES).map(([k, [t]]) => `<button data-m="${k}" class="${k === mode() ? "on" : ""}" ${k === "auto" && !canAuto() ? 'disabled title="Needs Microsoft 365 set up"' : ""}>${t}${k === "auto" && !canAuto() ? " · not set up" : ""}</button>`).join("")}</div>
+        <div class="muted" style="font-size:13px;margin-top:6px">${SEND_MODES[mode()][1]}${mode() === "outlook" ? " Tip: in Chrome, click ⌄ on the download → <b>Always open files of this type</b>, so each email opens in Outlook straight away." : ""}</div></div>
+      ${mode() === "auto" ? srvAuto : ""}`;
     const qq = norm(q);
-    const list = e.candidates.filter(c => (filter === "all" || (filter === "ready" ? c.state === "approved" : filter === "sent" ? c.state === "sent" : filter === "failed" ? c.state === "failed" : !c.state || c.state === "draft" || c.state === "flagged"))
+    const list = e.candidates.filter(c => (filter === "all" || (filter === "ready" ? c.state === "approved" : filter === "sent" ? c.state === "sent" || c.state === "prepared" : filter === "failed" ? c.state === "failed" : !c.state || c.state === "draft" || c.state === "flagged"))
       && (!qq || norm(c.name + " " + c.sid + " " + c.index + " " + c.email).includes(qq)));
     $("#sheet").innerHTML = `<div class="grab"></div><div class="bar-top"><div><b style="font-size:17px">Email admission cards</b><div class="muted">${esc(e.heading || e.level)}</div></div>${closeBtn}</div>
-      ${srv}
-      <div class="imp-sum"><div><b>${ready.length}</b><span>approved, ready</span></div><div><b style="color:var(--green)">${sent}</b><span>emailed</span></div><div><b class="${failed ? "danger" : ""}">${failed}</b><span>failed</span></div><div><b>${waiting}</b><span>not approved yet</span></div></div>
+      ${how}
+      <div class="imp-sum"><div><b>${ready.length}</b><span>approved, ready</span></div><div><b style="color:var(--green)">${sent + prepared}</b><span>${mode() === "auto" ? "emailed" : "done"}</span></div><div><b class="${failed ? "danger" : ""}">${failed}</b><span>failed</span></div><div><b>${waiting}</b><span>not approved yet</span></div></div>
       <details class="mprev msgbox"><summary>Message &amp; subject <span class="muted">· same for everyone, with their own details filled in</span></summary>
         <div class="card form" style="margin-top:8px">
           <div class="field stack"><label>Subject</label><input class="inp" id="mSub" value="${esc(e.emailSubject)}"></div>
@@ -419,7 +467,7 @@ async function openSend(e) {
         ${sample ? `<div class="mbox" style="margin-top:8px"><div class="mto">Preview for ${esc(sample.name)} · To: ${esc(sample.email || "—")}<br>Subject: <b>${esc(fillTemplate(e.emailSubject, e, sample))}</b><br>Attachment: 📎 ${esc(cardFileName(sample))}</div><pre>${esc(fillTemplate(e.emailBody, e, sample))}</pre></div>` : ""}
       </details>
       <div class="sbtools">
-        <div class="seg" id="sSeg">${[["all", "All", e.candidates.length], ["ready", "Ready", ready.length], ["todo", "Not approved", waiting], ["sent", "Emailed", sent], ["failed", "Failed", failed]].map(([k, t, n]) => `<button data-f="${k}" class="${k === filter ? "on" : ""}">${t} <span class="muted">${n}</span></button>`).join("")}</div>
+        <div class="seg" id="sSeg">${[["all", "All", e.candidates.length], ["ready", "Ready", ready.length], ["todo", "Not approved", waiting], ["sent", "Done", sent + prepared], ["failed", "Failed", failed]].map(([k, t, n]) => `<button data-f="${k}" class="${k === filter ? "on" : ""}">${t} <span class="muted">${n}</span></button>`).join("")}</div>
         <div class="search dsearch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="sQ" type="search" placeholder="Search name, student no, index or email" value="${esc(q)}"></div>
       </div>
       <div class="sgrid" id="sGrid">${list.map(box).join("") || `<div class="card empty dg-full">No students here.</div>`}</div>
@@ -429,11 +477,12 @@ async function openSend(e) {
         <span style="flex:1"></span>
         ${failed ? `<button class="btn" id="mRetry">Retry ${failed} failed</button>` : ""}
         <button class="btn" id="mZip">Download all PDFs</button>
-        <button class="btn primary" id="mGo" ${ready.length - noMail && canSend() && !SENDING ? "" : "disabled"}>${live() ? "Send" : "Create"} all ${ready.length - noMail}</button>
+        <button class="btn primary" id="mGo" ${ready.length - noMail && canSend() && mode() !== "mailto" && !SENDING ? "" : "disabled"} ${mode() === "mailto" ? 'title="With the email app link, open each student one by one"' : ""}>${mode() === "outlook" ? "Make Outlook emails for" : mode() === "mailto" ? "Open email for" : live() ? "Send" : "Create"} all ${ready.length - noMail}</button>
       </div>`;
     $("#mSub").oninput = ev => { e.emailSubject = ev.target.value; saveSoon(); };
     $("#mBody").oninput = ev => { e.emailBody = ev.target.value; saveSoon(); };
     $("#mCc").oninput = ev => { e.emailCc = ev.target.value.trim(); saveSoon(); };
+    $("#sMode").onclick = ev => { const b = ev.target.closest("[data-m]"); if (!b || b.disabled) return; DB.settings.sendMode = b.dataset.m; save(); redraw(); };
     $("#sSeg").onclick = ev => { const b = ev.target.closest("[data-f]"); if (b) { filter = b.dataset.f; redraw(); } };
     $("#sQ").oninput = ev => { q = ev.target.value; const pos = ev.target.selectionStart; redraw(); const i = $("#sQ"); i.focus(); i.setSelectionRange(pos, pos); };
     $("#mGo").onclick = () => runAll(e.candidates.filter(c => c.state === "approved" && isEmail(c.email)));
@@ -445,6 +494,7 @@ async function openSend(e) {
       if (btn.dataset.a === "pdf") return downloadOneCard(e, c);
       if (btn.dataset.a === "view") return viewCard(c);
       if (btn.dataset.a === "send") return sendSingle(c);
+      if (btn.dataset.a === "mark") { Object.assign(c, { state: "sent", sentAt: Date.now(), sentMode: "manual", sentTo: c.sentTo || c.email }); save(); redraw(); if (cur === e && !$("#adm-edit").classList.contains("hide")) { renderCands(); refreshPipeline(); } }
     });
   };
   // keep the log and scroll position when redrawing
@@ -469,7 +519,10 @@ async function openSend(e) {
       }
       if (live() && !confirm(`${c.state === "sent" ? "Resend" : "Send"} the admission card to ${c.name} (${c.email})?`)) return;
       busyIds.add(c.id); redraw();
-      try { const j = await sendOne(e, c); toast(j.mode === "test" ? `Saved to outbox for ${c.name}` : `Sent to ${c.name}`); }
+      try {
+        const j = mode() === "auto" ? await sendOne(e, c) : await prepareEmail(e, c, mode());
+        toast(j.mode === "outlook" ? `Outlook email for ${c.name} downloaded — open it and press Send` : j.mode === "mailto" ? `Email app opened for ${c.name} — attach the downloaded PDF` : j.mode === "test" ? `Saved to outbox for ${c.name}` : `Sent to ${c.name}`);
+      }
       catch (err) { Object.assign(c, { state: "failed", error: err.message }); toast("Failed: " + err.message); }
       busyIds.delete(c.id); save();
       if ($("#sheet").classList.contains("on") && $("#sheet").dataset.mode === "send") redraw();
@@ -486,9 +539,10 @@ async function openSend(e) {
   const runAll = async (list) => {
     if (!list.length || SENDING) return;
     if (live() && !confirm(`Send ${list.length} emails to students now? Each student gets only their own card.`)) return;
+    if (mode() === "outlook" && !confirm(`Make ${list.length} Outlook emails? Each one downloads as a file — open it in Outlook and press Send. If the browser asks to download multiple files, choose Allow.`)) return;
     SENDING = { stop: false };
     $("#mGo").disabled = true;
-    $("#sendLog").innerHTML = `<div class="card sendbox"><div class="sendtop"><b id="sgT">Sending…</b><button class="link danger" id="sgStop">Stop</button></div><div class="rvprog"><i id="sgBar"></i></div><div class="sglist" id="sgList"></div></div>`;
+    $("#sendLog").innerHTML = `<div class="card sendbox"><div class="sendtop"><b id="sgT">${mode() === "auto" ? "Sending…" : "Making emails…"}</b><button class="link danger" id="sgStop">Stop</button></div><div class="rvprog"><i id="sgBar"></i></div><div class="sglist" id="sgList"></div></div>`;
     $("#sgStop").onclick = () => { SENDING.stop = true; $("#sgT").textContent = "Stopping after the current email…"; };
     $("#sendLog").scrollIntoView({ behavior: "smooth", block: "start" });
     let done = 0, ok = 0, bad = 0; busy(true);
@@ -496,8 +550,9 @@ async function openSend(e) {
       const row = document.createElement("div"); row.className = "sgrow"; row.innerHTML = `<span class="spin"></span><b>${esc(c.name)}</b><span class="muted">${esc(c.sid || "")} · ${esc(c.email)}</span>`; $("#sgList")?.prepend(row);
       busyIds.add(c.id);
       try {
-        const j = await sendOne(e, c); ok++;
-        row.innerHTML = `<span class="okdot">✓</span><b>${esc(c.name)}</b><span class="muted">${esc(c.sid || "")} · ${j.mode === "test" ? "saved to " + esc(j.saved) : esc(c.email)}</span>`;
+        const j = mode() === "auto" ? await sendOne(e, c) : await prepareEmail(e, c, mode()); ok++;
+        if (j.mode === "outlook") await new Promise(r => setTimeout(r, 350));   // a short gap so the browser keeps every file
+        row.innerHTML = `<span class="okdot">✓</span><b>${esc(c.name)}</b><span class="muted">${esc(c.sid || "")} · ${j.mode === "outlook" ? "Outlook email made" : j.mode === "test" ? "saved to " + esc(j.saved) : esc(c.email)}</span>`;
       } catch (err) {
         Object.assign(c, { state: "failed", error: err.message }); bad++;
         row.innerHTML = `<span class="baddot">!</span><b>${esc(c.name)}</b><span class="danger">${esc(err.message)}</span>`;
@@ -506,11 +561,12 @@ async function openSend(e) {
       const el = $(`#sGrid .sbox[data-c="${CSS.escape(c.id)}"]`); if (el) el.outerHTML = box(c);
     };
     const queue = list.slice();
-    const lanes = SERVER.site === "vercel" ? [0] : [0, 1];   // website: one at a time, ~2 s apart (Microsoft allows ~30 a minute)
-    await Promise.all(lanes.map(async () => { while (queue.length && !SENDING.stop) { await one(queue.shift()); if (SERVER.site === "vercel" && queue.length) await new Promise(r => setTimeout(r, 2100)); } }));
+    const lanes = mode() !== "auto" || SERVER.site === "vercel" ? [0] : [0, 1];   // website: one at a time, ~2 s apart (Microsoft allows ~30 a minute)
+    await Promise.all(lanes.map(async () => { while (queue.length && !SENDING.stop) { await one(queue.shift()); if (mode() === "auto" && SERVER.site === "vercel" && queue.length) await new Promise(r => setTimeout(r, 2100)); } }));
     busy(false); SENDING = null;
-    if ($("#sgT")) { $("#sgT").textContent = `${ok} ${live() ? "sent" : "created in outbox"}${bad ? ` · ${bad} failed` : ""}${done < list.length ? ` · ${list.length - done} not sent (stopped)` : ""}`; $("#sgStop")?.remove(); }
-    toast(`${ok} email${ok === 1 ? "" : "s"} ${live() ? "sent" : "saved to outbox"}${bad ? ` · ${bad} failed` : ""}`);
+    const did = mode() === "outlook" ? "Outlook emails made — open each and press Send" : live() ? "sent" : "created in outbox";
+    if ($("#sgT")) { $("#sgT").textContent = `${ok} ${did}${bad ? ` · ${bad} failed` : ""}${done < list.length ? ` · ${list.length - done} not sent (stopped)` : ""}`; $("#sgStop")?.remove(); }
+    toast(`${ok} email${ok === 1 ? "" : "s"} ${mode() === "outlook" ? "made for Outlook" : live() ? "sent" : "saved to outbox"}${bad ? ` · ${bad} failed` : ""}`);
     if (cur === e && !$("#adm-edit").classList.contains("hide")) { renderCands(); refreshPipeline(); }
     setTimeout(() => { if ($("#sheet").classList.contains("on") && $("#sheet").dataset.mode === "send" && !SENDING) redraw(); }, 900);
   };

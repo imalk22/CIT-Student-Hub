@@ -175,6 +175,10 @@ To sign out, use **Sign out** on the Finance page. The office app (`npm start`) 
   - It approves every card that passes all checks. Cards with problems stay in *To review*.
   - It then opens the email step. Nothing is sent until you press **Send**.
   - Each student gets their card attached, named by student number.
+- **How Send works** (choose at the top of the email screen):
+  - **Open in Outlook** (default): each student gets a ready Outlook email, with their address, the subject and message filled in and **their PDF attached**. It downloads as a `.eml` file. Open it and Outlook shows it as a new email, so check it and press **Send**. Nothing is sent automatically. Tip: in Chrome, click ⌄ on the download and choose **Always open files of this type**, so each email opens in Outlook straight away. Afterwards, use **Mark as sent** on the student's box.
+  - **Email app link**: opens your email app with the student, subject and message filled in. The PDF downloads for you to attach.
+  - **Send automatically**: sends straight from the Microsoft 365 mailbox. This only works once Microsoft 365 is set up (see below).
 - **On the website**, PDFs are made in the browser, so no server is needed. To send emails from the website, add the same Microsoft 365 settings as the office app in Vercel → Settings → Environment Variables (Production), then redeploy:
 
   | Name | Value |

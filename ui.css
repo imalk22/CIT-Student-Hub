@@ -602,3 +602,9 @@ button.dkpi:hover{transform:translateY(-1px)}
 span.fromrec{display:inline}
 .note.fromnote{background:rgba(10,132,255,.09)}
 .sb-rows .fromrec{white-space:normal}
+
+.sendhow{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:6px 0 12px}
+.sendhow .seg{margin:0}
+.sendhow .seg button[disabled]{opacity:.45;cursor:not-allowed}
+.sb-note.prep{background:rgba(175,82,222,.12);color:#8e3fc0}
+.sbox.st-prepared{border-color:rgba(175,82,222,.5)}
