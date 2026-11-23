@@ -89,29 +89,14 @@ Keep `.env` private. It holds the secret and is excluded from git.
 
 The server sends one email about every 2 seconds to stay under Exchange Online's limit of about 30 messages a minute, so 150 cards take about 5 minutes. If Microsoft throttles the app anyway, the server waits and retries automatically.
 
-## Admission details check
+## Admission details check (Excel only)
 
-Right after an admission Excel is imported, the app checks every candidate and opens a report. You can open it again any time from the coloured bar above the candidate list.
+Right after an admission Excel is imported, the app checks **only what's in that Excel** and shows it as a table like the Excel. Cells with a problem are highlighted, and each row says what's wrong in plain words. You can open it again from the **Excel check** bar in the exam.
 
-- **Must fix:** these block approval in supervisor review.
-  - Missing name, a wrong or missing email, or a missing index number.
-  - The same index number used twice.
-  - No paper marked ×.
-  - The same student appearing twice in the Excel. The last row is kept, and the report shows which row it replaced.
-  - The same student number used twice.
-  - An index number for a different level, for example `/AN1/` in an Application exam.
-- **Double-check:** these show as warnings to the supervisor.
-  - The name, NIC, email or phone is different from the student's profile.
-  - The student number isn't found in the records.
-  - The NIC or phone number doesn't look right.
-  - The student applied for a paper they have already passed. It should be marked Exempted.
-  - A paper is marked Exempted but there's no pass or exemption on record.
-  - The student has already completed this level, or hasn't finished a lower level.
-  - The index prefix is different from the other candidates'.
-  - A student renewal is overdue.
-  - The student has unpaid Xero invoices.
+- **Red (need fixing):** an empty name, email or index number; an email that isn't written correctly; the same index number or student number used twice; the same student in the Excel twice; an index number for a different level (e.g. `/AN1/` in an Application exam); no subject marked ×. These cards can't be approved until fixed.
+- **Orange (please check):** an empty student number; a NIC or phone number that doesn't look right; the same email used for two students; an index number that starts differently from the others.
 
-Each row shows **Excel vs Profile** side by side. **Export issues** downloads the full list.
+**Download this list** saves the table to Excel with the result for each row.
 
 ## Member standing (suspended / terminated)
 
@@ -182,6 +167,29 @@ The Vercel site (`https://cit-student-hub.vercel.app`) can connect to Xero itsel
 > Set `HUB_PASSWORD` **before** deploying. Without it the site shows "This site is locked" rather than being open to everyone.
 
 To sign out, use **Sign out** on the Finance page. The office app (`npm start`) keeps working as before, with its own connection, and needs no password.
+
+## Admission cards: download all and email (website and office app)
+
+- **Download all:** in an exam, **Download all** gives you one ZIP file. Inside it, every student has their own PDF. You can choose **Separate PDF files** instead, to save each PDF straight to Downloads. Each file is named by student number, so `2026/01/3035` becomes `2026-01-3035.pdf`. If a candidate has no student number, the index number is used instead.
+- **Approve & email:** after importing the admission Excel and filling in the timetable, press **Approve N & email**. It's next to the check summary in the exam, and also in the check window.
+  - It approves every card that passes all checks. Cards with problems stay in *To review*.
+  - It then opens the email step. Nothing is sent until you press **Send**.
+  - Each student gets their card attached, named by student number.
+- **How Send works** (choose at the top of the email screen):
+  - **Open in Outlook** (default): each student gets a ready Outlook email, with their address, the subject and message filled in and **their PDF attached**. It downloads as a `.eml` file. Open it and Outlook shows it as a new email, so check it and press **Send**. Nothing is sent automatically. Tip: in Chrome, click ⌄ on the download and choose **Always open files of this type**, so each email opens in Outlook straight away. Afterwards, use **Mark as sent** on the student's box.
+  - **Email app link**: opens your email app with the student, subject and message filled in. The PDF downloads for you to attach.
+  - **Send automatically**: sends straight from the Microsoft 365 mailbox. This only works once Microsoft 365 is set up (see below).
+- **On the website**, PDFs are made in the browser, so no server is needed. To send emails from the website, add the same Microsoft 365 settings as the office app in Vercel → Settings → Environment Variables (Production), then redeploy:
+
+  | Name | Value |
+  |---|---|
+  | `MS_TENANT_ID` | Directory (tenant) ID |
+  | `MS_CLIENT_ID` | Application (client) ID |
+  | `MS_CLIENT_SECRET` | client secret value |
+  | `MS_SENDER` | the mailbox to send from, e.g. `exams@yourdomain.lk` |
+  | `MAIL_FROM_NAME` | optional, e.g. `CIT Examinations` |
+
+  Steps 1–4 of *Microsoft 365 setup* above explain how IT creates these. Then use **Data → Email & approvals → Check sign-in** and **Send a test**. The website sends one email about every 2 seconds, to stay within Microsoft's limit.
 
 ## Data that always shows (`data-files` folder)
 
