@@ -65,11 +65,11 @@ async function downloadAllCards(e, list = e.candidates, mode) {
     openSheet(`<div class="bar-top"><b style="font-size:17px">Download all admission cards</b>${closeBtn}</div>
       <p class="muted" style="margin-top:0">${plural(list.length, "student")} · a separate PDF for each student, named by student number (e.g. <b>${esc(cardFileName(list[0]))}</b>).</p>
       <div class="typecards">
-        <button class="typecard on" data-m="files"><span class="ic" style="background:var(--blue)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 13h7M9 17h7"/></svg></span><b>Separate PDF files</b><span>${plural(list.length, "PDF")} saved straight to your Downloads folder. If the browser asks “download multiple files”, choose <b>Allow</b>.</span></button>
-        <button class="typecard" data-m="zip"><span class="ic" style="background:var(--purple)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M12 4v4M12 10v2M12 14v2"/></svg></span><b>One ZIP file</b><span>The same separate PDFs packed in one ZIP — handy for emailing or sharing.</span></button>
+        <button class="typecard" data-m="files"><span class="ic" style="background:var(--blue)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 13h7M9 17h7"/></svg></span><b>Separate PDF files</b><span>${plural(list.length, "PDF")} saved straight to your Downloads folder. If the browser asks “download multiple files”, choose <b>Allow</b>.</span></button>
+        <button class="typecard on" data-m="zip"><span class="ic" style="background:var(--purple)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M12 4v4M12 10v2M12 14v2"/></svg></span><b>One ZIP file</b><span>One download — open it and every student has their own PDF inside, named by student number.</span></button>
       </div>
-      <div class="actions" style="justify-content:flex-end"><button class="btn primary" id="dlGo">Download ${plural(list.length, "PDF")}</button></div>`);
-    let m = "files";
+      <div class="actions" style="justify-content:flex-end"><button class="btn primary" id="dlGo">Download ZIP (${plural(list.length, "PDF")})</button></div>`);
+    let m = "zip";
     $("#sheet .typecards").onclick = ev => { const b = ev.target.closest("[data-m]"); if (!b) return; m = b.dataset.m; $$("#sheet .typecard").forEach(x => x.classList.toggle("on", x === b)); $("#dlGo").textContent = m === "zip" ? `Download ZIP (${plural(list.length, "PDF")})` : `Download ${plural(list.length, "PDF")}`; };
     $("#dlGo").onclick = () => downloadAllCards(e, list, m);
     return;

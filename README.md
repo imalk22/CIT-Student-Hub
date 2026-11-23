@@ -185,7 +185,7 @@ To sign out, use **Sign out** on the Finance page. The office app (`npm start`) 
 
 ## Admission cards: download all and email (website and office app)
 
-- **Download all:** in an exam, **Download all** saves a separate PDF for every student straight to your Downloads folder. If the browser asks to allow multiple downloads, choose **Allow**. You can choose **One ZIP file** instead, which packs the same separate PDFs together. Each file is named by student number, so `2026/01/3035` becomes `2026-01-3035.pdf`. If a candidate has no student number, the index number is used instead.
+- **Download all:** in an exam, **Download all** gives you one ZIP file. Inside it, every student has their own PDF. You can choose **Separate PDF files** instead, to save each PDF straight to Downloads. Each file is named by student number, so `2026/01/3035` becomes `2026-01-3035.pdf`. If a candidate has no student number, the index number is used instead.
 - **Approve & email:** after importing the admission Excel and filling in the timetable, press **Approve N & email**. It's next to the check summary in the exam, and also in the check window.
   - It approves every card that passes all checks. Cards with problems stay in *To review*.
   - It then opens the email step. Nothing is sent until you press **Send**.
