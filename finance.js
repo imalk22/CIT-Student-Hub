@@ -52,6 +52,7 @@ async function xeroPoll() {
     const after = finIndex().total;
     if (before != null && Math.round(before) !== Math.round(after)) toast(`Xero updated · outstanding now ${rs(after)}`);
     if (currentTab === "fin") renderFinance();
+    else if (currentTab === "out" && typeof renderOutstanding === "function") renderOutstanding();
     else if (!$("#v-profile").classList.contains("hide") && typeof refreshProfile === "function") refreshProfile();
     else if (!$("#v-mprof").classList.contains("hide") && mProfileNo) { const m = MEMBERS().find(x => x.no === mProfileNo); if (m) renderMemberProfile(m); }
   } catch { }

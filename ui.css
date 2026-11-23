@@ -448,3 +448,7 @@ a.btn{text-decoration:none}
 .xinv>b{font-variant-numeric:tabular-nums;white-space:nowrap}
 .xinv.late>b,.owe{color:var(--red)}
 @media (max-width:520px){.xinv{grid-template-columns:1fr auto}.xinv>.muted{grid-column:1/-1;order:3;font-size:12.5px}}
+
+/* ---------- student outstanding ---------- */
+.outrow .t span.outchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;white-space:normal;overflow:visible}
+.outchips .chip{font-size:11.5px}
