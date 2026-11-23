@@ -18,12 +18,16 @@ function rememberContact(c) {
 }
 
 /* ---------------- search ---------------- */
+// student / index numbers typed any way: "2026 / CTT - 4047", "2026/ctt/04047" all mean 2026/CTT/4047
+const idCanon = s => String(s ?? "").trim().toLowerCase().replace(/\s*[/\-–]\s*/g, "/");
+const idKey = s => { const p = idCanon(s).split("/"); if (p.length > 1 && /^\d+$/.test(p.at(-1))) p[p.length - 1] = String(+p.at(-1)); return p.join("/"); };
+const looksLikeStudentNo = q => /^\d{4}(\/[a-z0-9]{1,4}){1,2}\/\d{3,5}$/.test(idCanon(q));
 const HAY = new WeakMap();
 function hay(s) {
   let h = HAY.get(s);
   if (!h) {
     const ct = s.contact || {};
-    h = { name: norm(s.name), ids: [s.id, ...s.index_nos].map(x => x.toLowerCase()), nic: String(ct.nic || "").toLowerCase(),
+    h = { name: norm(s.name), ids: [s.id, ...s.index_nos].map(x => x.toLowerCase()), idKeys: [s.id, ...s.index_nos].map(idKey), nic: String(ct.nic || "").toLowerCase(),
       email: String(ct.email || "").toLowerCase(), phones: [ct.phone, ct.whatsapp].filter(Boolean).map(phoneKey), initials: norm(ct.initials || "") };
     HAY.set(s, h);
   }
@@ -32,10 +36,12 @@ function hay(s) {
 function searchStudents(q, limit = 8) {
   q = q.trim(); if (!q) return [];
   const ql = q.toLowerCase(), toks = norm(q).split(" ").filter(Boolean), dq = digits(q);
+  const idq = idCanon(q), idk = idKey(q);   // "2026 - CTT - 04047" → "2026/ctt/04047" / "2026/ctt/4047"
   const out = [];
   for (const s of DB.students) {
     const h = hay(s); let score = 0, why = "";
-    if (h.ids.includes(ql)) { score = 100; why = "Exact number"; }
+    if (h.ids.includes(ql) || (/\//.test(idq) && (h.ids.includes(idq) || h.idKeys.includes(idk)))) { score = 100; why = "Exact number"; }
+    else if (/\//.test(idq) && idq.length >= 5 && h.ids.some(i => i.includes(idq))) { score = 72; why = "Number"; }
     else if (h.nic && h.nic === ql) { score = 100; why = "NIC"; }
     else if (h.email && h.email === ql) { score = 100; why = "Email"; }
     else if (dq.length >= 9 && h.phones.includes(phoneKey(dq))) { score = 95; why = "Phone"; }
@@ -134,7 +140,9 @@ function renderHomeResults() {
   homeSel = 0;
   $("#hres").innerHTML = hits.length
     ? `<div class="hres-head">${total} match${total === 1 ? "" : "es"}${total > hits.length ? ` · showing the best ${hits.length}` : ""} <span>↵ opens the first</span></div><div class="hits">${hits.map((h, i) => resultCard(h.s, q, h.why, i)).join("")}</div>`
-    : `<div class="card empty-hero"><div class="eh-ic">?</div><b>No student matches “${esc(q)}”</b><span>Try part of the name, the student number (e.g. 2026/01/3856), an index number, NIC, phone or email.</span></div>`;
+    : looksLikeStudentNo(q)
+      ? `<div class="card empty-hero"><div class="eh-ic">?</div><b>${esc(idCanon(q).toUpperCase())} isn't in the student records yet</b><span>The number looks right, but no imported file has this student. New students appear after their Course Registration Master (or results file) is imported on the Data tab — or put it in the data-files folder and refresh.</span></div>`
+      : `<div class="card empty-hero"><div class="eh-ic">?</div><b>No student matches “${esc(q)}”</b><span>Try part of the name, the student number (e.g. 2026/CTT/4047 or 2026/01/3856), an index number, NIC, phone or email.</span></div>`;
   $$("#hres .hit").forEach(h => h.classList.add("tilt"));
   markSel();
 }
@@ -211,6 +219,24 @@ function subjectState(s, level, subject) {
   if (passed) { st = "pass"; label = "Passed"; } else if (ex) { st = "ex"; label = ex.status; } else if (pc) { st = "pass"; label = "Completed"; }
   return { st, label, best, tries, last: rs.at(-1) };
 }
+/* "Exam index · Analyst 1 · Jan 2025" — which exam an index number belongs to.
+   Uses the exam it was saved with (results imports / admission cards), otherwise reads level + year from the number. */
+function indexLabel(s, idx) {
+  const sit = s.sittings.find(x => x.index === idx);
+  if (sit) return `Exam index · ${sit.level} · ${sit.session.replace(/^.*?-\s*/, "") || sit.session}`;
+  const ex = (DB.exams || []).find(e => e.candidates.some(c => c.index === idx));
+  const t = String(idx).toUpperCase().replace(/\s+/g, "");
+  const CODES = { AP: "Application", A1: "Analyst 1", AN1: "Analyst 1", AL1: "Analyst 1", A2: "Analyst 2", AN2: "Analyst 2", AL2: "Analyst 2", AD: "Advisory" };
+  let m = t.match(/^(\d{2})\/(AP|AN1|AN2|AL1|AL2|A1|A2|AD)\//) || t.match(/^(AP|AN1|AN2|AL1|AL2|A1|A2|AD)(\d{2})\d+$/);
+  let level = "", year = "";
+  if (m) { if (/^\d/.test(m[1])) { year = m[1]; level = CODES[m[2]]; } else { level = CODES[m[1]]; year = m[2]; } }
+  if (ex) return `Exam index · ${ex.level}${year ? " · 20" + year : ""} · admission card`;
+  // the only sitting at that level in that year → name it
+  const cand = s.sittings.filter(x => (!level || x.level === level) && (!year || String(x.date || "").startsWith("20" + year)));
+  const uniq = [...new Set(cand.map(x => x.session))];
+  if (uniq.length === 1) return `Exam index · ${level || cand[0].level} · ${uniq[0].replace(/^.*?-\s*/, "")}`;
+  return `Exam index${level ? " · " + level : ""}${year ? " · 20" + year : ""}`;
+}
 function renderProfile(s) {
   const ct = s.contact || {}, m = currentLevel(s), ads = admissionsFor(s);
   const hue = color(s.name);
@@ -244,7 +270,7 @@ function renderProfile(s) {
         <div class="pass-id">
           <h1 class="pname">${esc(s.name)}</h1>
           ${ct.initials ? `<div class="pinit">${esc((ct.title ? ct.title + " " : "") + ct.initials)}</div>` : ""}
-          <div class="pnums"><span class="num" data-copy="${esc(s.id)}">${I.id}${esc(s.id)}</span>${s.index_nos.slice(-3).reverse().map(i => `<span class="num ghost" data-copy="${esc(i)}">${esc(i)}</span>`).join("")}</div>
+          <div class="pnums"><span class="num lbl" data-copy="${esc(s.id)}" title="Student number — given at registration, never changes. Click to copy."><small>Student no</small><span>${I.id}${esc(s.id)}</span></span>${s.index_nos.slice().reverse().map(i => `<span class="num ghost lbl" data-copy="${esc(i)}" title="Exam index number — a new one for each exam. Click to copy."><small>${esc(indexLabel(s, i))}</small><span>${esc(i)}</span></span>`).join("")}</div>
         </div>
       </div>
       <div class="answer"><div class="ans-k">Quick answer</div><div class="ans-t">${esc(answerLine(s))}</div>

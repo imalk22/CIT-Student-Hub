@@ -222,6 +222,21 @@
     return { ...m, years };
   }
 
-  const api = { DEFAULT_RATES, applyRates, parseWorkbook, parseSheet, parsePayments, account, summary, fiscalYear, normNo, prettyNo, yearStart };
+  /* ---------- standing: suspended / terminated ----------
+     Counts the membership years (up to and including the current one) that still have something due.
+     W/O years and years with no charge never count. "2017/18 & before" counts as one year.
+     2+ unpaid years → suspended (no slip / receipt until cleared); 5+ → terminated. */
+  const DEFAULT_STANDING = { suspendAt: 2, terminateAt: 5 };
+  function standing(m, currentYear, rules = DEFAULT_STANDING) {
+    const r = { ...DEFAULT_STANDING, ...(rules || {}) };
+    if (m.status === "deceased" || m.honorary || m.noFeeRecord || !m.years?.length) return { state: "na", unpaid: [], count: 0 };
+    const cy = yearStart(currentYear);
+    const unpaid = m.years.filter(y => y.state !== "waived" && (y.due || 0) > 0 && yearStart(y.year) <= cy).map(y => y.year);
+    const count = unpaid.length;
+    const state = count >= r.terminateAt ? "terminated" : count >= r.suspendAt ? "suspended" : "good";
+    return { state, unpaid, count };
+  }
+
+  const api = { DEFAULT_RATES, DEFAULT_STANDING, standing, applyRates, parseWorkbook, parseSheet, parsePayments, account, summary, fiscalYear, normNo, prettyNo, yearStart };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.MembersCore = api;
 })(typeof window !== "undefined" ? window : globalThis);

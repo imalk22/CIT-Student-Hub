@@ -4,7 +4,17 @@
   "installCommand": "",
   "buildCommand": "",
   "cleanUrls": false,
+  "rewrites": [
+    { "source": "/xero/:action", "destination": "/api/xero/:action" }
+  ],
+  "functions": {
+    "api/**/*.js": { "maxDuration": 60 }
+  },
+  "crons": [
+    { "path": "/api/xero/cron", "schedule": "17 3 * * *" }
+  ],
   "headers": [
-    { "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
+    { "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
+    { "source": "/data.json", "headers": [{ "key": "Cache-Control", "value": "private, no-store" }] }
   ]
 }

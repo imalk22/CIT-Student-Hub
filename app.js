@@ -999,7 +999,7 @@ function commitImport() {
         : prev.some(p => /referred/i.test(p.overall)) ? "Re-Referred" : "Referred";
     }
     s.sittings = s.sittings.filter(x => x.session !== session);
-    s.sittings.push({ level: IMP.level, session, date: IMP.date || new Date().toISOString().slice(0, 7), overall, results: r.results, src: hid });
+    s.sittings.push({ level: IMP.level, session, date: IMP.date || new Date().toISOString().slice(0, 7), overall, results: r.results, src: hid, index: r.index || "" });
   }
   DB.imports.push({ id: hid, file: IMP.file, session, level: IMP.level, rows: recs.length, matched, created, at: Date.now() });
   IMP = null; derive(); save(); renderImporter(); renderData();

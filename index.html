@@ -28,6 +28,7 @@
       <button data-tab="home"><span class="sb-ic" style="--c:#2f80ff"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>Student lookup</button>
       <button data-tab="dash"><span class="sb-ic" style="--c:#5b5bd6"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg></span>Insights</button>
       <button data-tab="mem"><span class="sb-ic" style="--c:#f59e0b"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2 .6 3 2.6 3 6"/></svg></span>Members</button>
+      <button data-tab="fin"><span class="sb-ic" style="--c:#0ea5e9"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2.5"/><path d="M2 10h20M6 15h4"/></svg></span>Finance · Xero</button>
       <button data-tab="adm"><span class="sb-ic" style="--c:#ef4444"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.6-1.4 1.7-2 3-2s2.4.6 3 2M15 10h3M15 13h3"/></svg></span>Admissions</button>
       <button data-tab="rules"><span class="sb-ic" style="--c:#a855f7"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M9 7h6M9 11h6"/></svg></span>Rules &amp; fees</button>
       <button data-tab="data"><span class="sb-ic" style="--c:#22c55e"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>Data &amp; settings</button>
@@ -67,6 +68,13 @@
     <!-- MEMBERS -->
     <section id="v-mem" class="view hide"></section>
     <section id="v-mprof" class="view hide"></section>
+    <section id="v-mstand" class="view hide"></section>
+
+    <!-- STUDENT OUTSTANDING -->
+    <section id="v-out" class="view hide"></section>
+
+    <!-- FINANCE (Xero) -->
+    <section id="v-fin" class="view hide"></section>
 
     <!-- RULES & FEES -->
     <section id="v-rules" class="view hide"></section>
@@ -168,9 +176,15 @@
 <script src="workflow.js"></script>
 <script src="members-core.js"></script>
 <script src="members.js"></script>
+<script src="standing.js"></script>
 <script src="cit-docs-core.js"></script>
 <script src="rules.js"></script>
 <script src="cit-docs.js"></script>
+<script src="admcheck-core.js"></script>
+<script src="admcheck.js"></script>
+<script src="xero-core.js"></script>
+<script src="finance.js"></script>
+<script src="outstanding.js"></script>
 <script src="insights.js"></script>
 <script src="shell.js"></script>
 </body>

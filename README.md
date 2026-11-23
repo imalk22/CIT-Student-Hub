@@ -89,6 +89,100 @@ Keep `.env` private. It holds the secret and is excluded from git.
 
 The server sends one email about every 2 seconds to stay under Exchange Online's limit of about 30 messages a minute, so 150 cards take about 5 minutes. If Microsoft throttles the app anyway, the server waits and retries automatically.
 
+## Admission details check
+
+Right after an admission Excel is imported, the app checks every candidate and opens a report. You can open it again any time from the coloured bar above the candidate list.
+
+- **Must fix:** these block approval in supervisor review.
+  - Missing name, a wrong or missing email, or a missing index number.
+  - The same index number used twice.
+  - No paper marked ×.
+  - The same student appearing twice in the Excel. The last row is kept, and the report shows which row it replaced.
+  - The same student number used twice.
+  - An index number for a different level, for example `/AN1/` in an Application exam.
+- **Double-check:** these show as warnings to the supervisor.
+  - The name, NIC, email or phone is different from the student's profile.
+  - The student number isn't found in the records.
+  - The NIC or phone number doesn't look right.
+  - The student applied for a paper they have already passed. It should be marked Exempted.
+  - A paper is marked Exempted but there's no pass or exemption on record.
+  - The student has already completed this level, or hasn't finished a lower level.
+  - The index prefix is different from the other candidates'.
+  - A student renewal is overdue.
+  - The student has unpaid Xero invoices.
+
+Each row shows **Excel vs Profile** side by side. **Export issues** downloads the full list.
+
+## Member standing (suspended / terminated)
+
+Membership years with a balance are counted up to and including the current year. W/O years and years with no charge are not counted.
+
+- **2 or more unpaid years → Suspended.** Don't issue a membership slip or receipt until the arrears are cleared. The member's page shows an orange banner.
+- **5 or more unpaid years → Terminated.** These members move out of "All active" onto their own page.
+
+Open the standing page from the **Member standing** card on the Members tab, or use the Suspended and Terminated filters. Both lists can be exported. To change the thresholds, use **Rules** on the standing page.
+
+## Xero setup (Finance page)
+
+The **Finance** page (card icon at the top, or *Finance · Xero* in the sidebar) shows outstanding invoices from Xero, matched to students and members. Student dues have their own **Dues** tab (Student outstanding), kept separate from exam results — the student profile shows results only. Member pages get a *Finance · Xero* card. The app only **reads** from Xero and never changes anything there. Syncing works only through `npm start`, not on the Vercel website. The last synced copy stays in the browser.
+
+**1. Create the Xero app** (once). Sign in at [developer.xero.com/app/manage](https://developer.xero.com/app/manage) with a login that can see the CIT organisation, then choose **New app**.
+- Integration type: **Web app**. App name: `CIT Student Hub`. Company or application URL: the private Vercel site, `https://cit-student-hub.vercel.app`. Xero only shows this on the consent screen, and the app doesn't use it.
+- Redirect URI: `http://localhost:5173/xero/callback`. If you changed `PORT`, use that port instead.
+- Open **Configuration** and copy the **Client id**. Then **Generate a secret** and copy it, because it's only shown once.
+
+**2. Add the keys to `.env`** and restart `npm start`:
+
+```
+XERO_CLIENT_ID=<client id>
+XERO_CLIENT_SECRET=<client secret>
+```
+
+**3. Connect.** Open Finance and click **Connect to Xero**. Sign in, pick the CIT organisation and click **Allow access**. The app asks for read-only access to invoices and contacts (`accounting.invoices.read`, `accounting.contacts.read`). The connection is saved in `xero-tokens.json` on this computer, which is excluded from git and never served. It stays connected as long as you sync at least once every 60 days.
+
+**Live updates.** Once connected, the app re-reads Xero by itself every 10 minutes. You can change this with `XERO_SYNC_MINUTES` in `.env` (minimum 2). Any open Finance, student or member page refreshes within about 2 minutes of each sync and shows a toast when the outstanding total changes. **Sync now** still updates straight away.
+
+**How invoices are matched.** Only unpaid sales invoices (*Awaiting payment*) are read. Each one is matched to a person in this order:
+1. A student number (`2024/A1/3236`) or index number in the contact's **account number**, the contact name, the invoice reference or the line description.
+2. A membership number (`F 014`, `A-352`) in the account number, contact name or reference.
+3. The contact's email.
+4. The contact's name, if exactly one student or member has that name.
+
+Anything left over appears under **Not matched**. To fix those, put the student or membership number in the Xero contact's **Account number** field and sync again.
+
+> Older Xero apps may still use the broad scope `accounting.transactions.read` instead. In that case set `XERO_SCOPES=offline_access accounting.transactions.read accounting.contacts.read` in `.env`.
+
+## Xero on the Vercel site (auto-updating, staff login)
+
+The Vercel site (`https://cit-student-hub.vercel.app`) can connect to Xero itself, so Finance and Dues stay up to date without the office computer.
+
+- **Staff login:** the whole site, including `data.json`, needs a staff password. People stay signed in for 30 days. Changing the password signs everyone out.
+- **Live updates:**
+  - While anyone has the site open, the Xero data is re-read once it's older than 10 minutes.
+  - **Sync now** updates straight away.
+  - A daily job keeps the Xero connection alive even when nobody opens the site.
+
+**One-time setup** (in this order):
+
+1. **Storage.** In Vercel, open the project → **Storage** → **Create / Browse Marketplace** → **Upstash for Redis** (free plan). Create it and **connect it to this project**. This keeps the Xero connection between visits.
+2. **Environment variables.** Open Vercel → project → **Settings → Environment Variables** and add these for **Production**:
+
+   | Name | Value |
+   |---|---|
+   | `HUB_PASSWORD` | the staff password (long, not used anywhere else) |
+   | `XERO_CLIENT_ID` | from the Xero app |
+   | `XERO_CLIENT_SECRET` | from the Xero app |
+   | `XERO_REDIRECT_URI` | `https://cit-student-hub.vercel.app/xero/callback` |
+   | `CRON_SECRET` | any long random text (protects the daily sync) |
+
+3. **Xero app.** In the Xero app's **Configuration**, click **Add another URI** under redirect URIs and add `https://cit-student-hub.vercel.app/xero/callback`. Keep the `localhost` one too.
+4. **Deploy.** Merge the branch into `main`, or click **Redeploy** in Vercel after adding the variables.
+5. **Connect.** Open the site and sign in with the staff password. Go to **Finance → Connect to Xero** and click **Allow access**.
+
+> Set `HUB_PASSWORD` **before** deploying. Without it the site shows "This site is locked" rather than being open to everyone.
+
+To sign out, use **Sign out** on the Finance page. The office app (`npm start`) keeps working as before, with its own connection, and needs no password.
+
 ## Data that always shows (`data-files` folder)
 
 The Excel files in `student-hub/data-files/` load automatically every time the app opens, in any browser on this computer: the membership fee report, members' details, last renewal year, the fellow↔associate list, the registration masters and the student renewals.

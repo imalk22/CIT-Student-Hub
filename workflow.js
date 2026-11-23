@@ -130,18 +130,23 @@ function parseCandidates(e, header, body) {
   subCols.forEach((v, k) => { if (v < 0 && rest.length) subCols[k] = rest.shift(); });
   const get = (r, k) => ci[k] >= 0 ? String(r[ci[k]] ?? "").replace(/\s+/g, " ").trim() : "";
   let added = 0, updated = 0, linked = 0, emails = 0;
+  const seenNow = new Set();
   for (const r of body) {
     const name = get(r, "name"); if (!name) continue;
     const sid = get(r, "sid"), idx = get(r, "index"), L = x => x.toLowerCase();
-    const st = (sid && DB.students.find(s => L(s.id) === L(sid))) || (idx && DB.students.find(s => s.index_nos.some(i => L(i) === L(idx)))) || DB.students.find(s => norm(s.name) === norm(name)) || null;
+    const st = (sid && DB.students.find(s => idKey(s.id) === idKey(sid))) || (idx && DB.students.find(s => s.index_nos.some(i => idKey(i) === idKey(idx)))) || DB.students.find(s => norm(s.name) === norm(name)) || null;
     const info = { title: get(r, "title"), initials: get(r, "initials"), email: get(r, "email").replace(/\s+/g, ""), phone: get(r, "phone"), whatsapp: get(r, "whatsapp"), nic: get(r, "nic") };
+    const prev = st ? { name: st.name, email: st.contact?.email || "", phone: st.contact?.phone || "", nic: st.contact?.nic || "" } : null;
     if (st) {
       linked++; setContact(st, info);
       if (idx && !st.index_nos.includes(idx)) { st.index_nos.push(idx); HAY.delete(st); }
     }
     let c = e.candidates.find(x => (st && x.sid === st.id) || (idx && x.index === idx));
     if (c) { touched(c); updated++; } else { c = candidateFrom(e, st); e.candidates.push(c); added++; }
-    Object.assign(c, { name, index: idx || c.index, sid: st?.id || sid || c.sid, title: info.title, initials: info.initials, email: info.email || c.email, phone: info.phone, nic: info.nic });
+    // the same student twice in one sheet: the later row replaces the earlier one — remember it for the details check
+    if (seenNow.has(c)) { c.dupRows = (c.dupRows || 1) + 1; c.dupReplaced = [...(c.dupReplaced || []), [c.name, c.index, c.email].filter(Boolean).join(" · ")]; updated--; }
+    else { seenNow.add(c); c.dupRows = 1; c.dupReplaced = []; }
+    Object.assign(c, { name, index: idx || c.index, sid: st?.id || sid || c.sid, sheetSid: sid, title: info.title, initials: info.initials, email: info.email || c.email, phone: info.phone, nic: info.nic, prev: c.prev || prev });
     if (isEmail(c.email)) emails++;
     e.subjects.forEach((s, k) => { if (subCols[k] >= 0) c.status[s.id] = readStatus(r[subCols[k]]); });
   }
@@ -156,6 +161,7 @@ async function importCandidates(file) {
     if (!e.indexPrefix || /\/E1\/$/.test(e.indexPrefix)) { const first = e.candidates.find(c => c.index)?.index; if (first) e.indexPrefix = first.replace(/[^/]+$/, ""); }
     derive(); save(); renderEditor();
     toast(`${r.added} added · ${r.updated} updated · ${r.linked} linked to profiles · ${r.emails} with email`);
+    if (typeof openAdmCheck === "function") setTimeout(() => openAdmCheck(e, { afterImport: true }), 350);
   } catch (err) { toast(err.message); }
 }
 
@@ -195,8 +201,8 @@ async function importAdmissionExcel(file) {
       const r = parseCandidates(e, header, body);
       const first = e.candidates.find(c => c.index)?.index; if (first) e.indexPrefix = first.replace(/[^/]+$/, "");
       e.source = file.name; DB.exams.push(e); cur = e; derive(); save(); closeSheet(); tab("adm");
-      toast(`Created with ${r.total} candidates · next: fill in the timetable dates`);
-      setTimeout(() => $("#subs")?.closest(".card")?.scrollIntoView({ behavior: "smooth", block: "center" }), 400);
+      toast(`Created with ${r.total} candidates — checking the details`);
+      setTimeout(() => typeof openAdmCheck === "function" ? openAdmCheck(e, { afterImport: true }) : $("#subs")?.closest(".card")?.scrollIntoView({ behavior: "smooth", block: "center" }), 400);
     } catch (err) { toast(err.message); }
   };
 }
@@ -257,7 +263,7 @@ function reviewUI(e) {
       <div class="rvhead card">
         <div class="rvwho"><div class="av" style="background:${color(c.name || "?")}">${initials(c.name || "?")}</div>
           <div><b>${esc(c.name || "No name")}</b><span>${esc(c.index || "no index")} · ${esc(c.email || "no email")}</span></div>${stateChip(c)}</div>
-        <div class="checks">${ck.map(([o, t]) => `<span class="ck ${o ? "ok" : "bad"}">${o ? "✓" : "!"} ${esc(t)}</span>`).join("")}</div>
+        <div class="checks">${ck.map(([o, t, w]) => `<span class="ck ${w ? "warn" : o ? "ok" : "bad"}">${w ? "⚠" : o ? "✓" : "!"} ${esc(t)}</span>`).join("")}</div>
         ${!isEmail(c.email) ? `<div class="fixmail"><input class="inp" id="rvMail" type="email" value="${esc(c.email || "")}" placeholder="Correct email address"><button class="btn small" id="rvMailGo">Save email</button></div>` : ""}
         ${c.state === "flagged" && c.note ? `<div class="note" style="margin:8px 0 0">Flag: ${esc(c.note)}</div>` : ""}
         ${c.approvedBy ? `<div class="muted" style="margin-top:6px">Approved by ${esc(c.approvedBy)} · ${new Date(c.approvedAt).toLocaleString()}</div>` : ""}
