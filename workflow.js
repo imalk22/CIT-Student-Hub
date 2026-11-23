@@ -135,7 +135,7 @@ function parseCandidates(e, header, body) {
   const rest = header.map((_, i) => i).filter(i => !used.has(i) && i > Math.max(ci.name, ci.index));
   subCols.forEach((v, k) => { if (v < 0 && rest.length) subCols[k] = rest.shift(); });
   const get = (r, k) => ci[k] >= 0 ? String(r[ci[k]] ?? "").replace(/\s+/g, " ").trim() : "";
-  let added = 0, updated = 0, linked = 0, emails = 0;
+  let added = 0, updated = 0, linked = 0, emails = 0, fromRecords = 0;
   const seenNow = new Set();
   for (const r of body) {
     const name = get(r, "name"); if (!name) continue;
@@ -153,10 +153,13 @@ function parseCandidates(e, header, body) {
     if (seenNow.has(c)) { c.dupRows = (c.dupRows || 1) + 1; c.dupReplaced = [...(c.dupReplaced || []), [c.name, c.index, c.email].filter(Boolean).join(" · ")]; updated--; }
     else { seenNow.add(c); c.dupRows = 1; c.dupReplaced = []; }
     Object.assign(c, { name, index: idx || c.index, sid: st?.id || sid || c.sid, sheetSid: sid, title: info.title, initials: info.initials, email: info.email || c.email, phone: info.phone, nic: info.nic, prev: c.prev || prev });
+    // no email in the Excel → the student's saved email (registration files) is used; remember that so the screens can say so
+    c.emailFromRecords = !info.email && c.email ? c.email : "";
     if (isEmail(c.email)) emails++;
+    if (c.emailFromRecords) fromRecords++;
     e.subjects.forEach((s, k) => { if (subCols[k] >= 0) c.status[s.id] = readStatus(r[subCols[k]]); });
   }
-  return { added, updated, linked, emails, total: added + updated };
+  return { added, updated, linked, emails, fromRecords, total: added + updated };
 }
 async function importCandidates(file) {
   const e = cur;
@@ -166,7 +169,7 @@ async function importCandidates(file) {
     const r = parseCandidates(e, header, body);
     if (!e.indexPrefix || /\/E1\/$/.test(e.indexPrefix)) { const first = e.candidates.find(c => c.index)?.index; if (first) e.indexPrefix = first.replace(/[^/]+$/, ""); }
     derive(); save(); renderEditor();
-    toast(`${r.added} added · ${r.updated} updated · ${r.linked} linked to profiles · ${r.emails} with email`);
+    toast(`${r.added} added · ${r.updated} updated · ${r.linked} linked to profiles · ${r.emails} with email${r.fromRecords ? ` (${r.fromRecords} from student records)` : ""}`);
     if (typeof openAdmCheck === "function") setTimeout(() => openAdmCheck(e, { afterImport: true }), 350);
   } catch (err) { toast(err.message); }
 }
@@ -379,6 +382,7 @@ async function openSend(e) {
       <div class="sb-rows">
         <div><small>Index no</small><span>${esc(c.index || "—")}</span></div>
         <div><small>Email</small><span class="${mailOk ? "" : "danger"}">${esc(c.email || "no email")}</span></div>
+        ${c.emailFromRecords && c.emailFromRecords === c.email ? `<div><small></small><span class="fromrec">from student records (not in the Excel)</span></div>` : ""}
       </div>
       <div class="sb-file">📄 <span>${esc(file)}</span></div>
       ${st === "sent" ? `<div class="sb-note ok">✓ Emailed ${when(c.sentAt)}${c.sentMode === "test" ? " (test — saved to outbox)" : ""} to ${esc(c.sentTo || c.email)}</div>` : ""}

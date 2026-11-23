@@ -24,6 +24,7 @@ function openAdmCheck(e, opts = {}) {
       <span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="acReview">Review one by one</button><button class="btn primary" id="acQuick"></button></span></div>
     <div id="acQuickNote" class="muted" style="font-size:13px;text-align:right;margin-top:-4px"></div>`);
   $("#sheet").classList.add("wide");
+  const fromRec = c => c.emailFromRecords && c.emailFromRecords === c.email;
   const papers = c => { const x = e.subjects.filter(s => c.status?.[s.id] === "X").length, ex = e.subjects.filter(s => c.status?.[s.id] === "Exempted").length; return `${x} ×${ex ? ` · ${ex} exempt` : ""}`; };
   const draw = () => {
     const r = R();
@@ -32,19 +33,20 @@ function openAdmCheck(e, opts = {}) {
         <div class="ok"><b>${r.clean}</b><span>all correct</span></div>
         <div class="bad"><b>${r.errors}</b><span>need fixing</span></div>
         <div class="warn"><b>${r.warns}</b><span>please check</span></div></div>
+      ${(() => { const n = e.candidates.filter(fromRec).length; return n ? `<div class="note fromnote" style="margin-top:10px"><b>${plural(n, "email")}</b> ${n === 1 ? "wasn't" : "weren't"} in the Excel — the app used the email saved in ${n === 1 ? "that student's" : "those students'"} record (from the registration files). They're marked <span class="fromrec">blue</span> below. Add the email to the Excel if you want to use a different one.</div>` : ""; })()}
       <div class="note" style="margin-top:10px">${r.errors ? `<b>Red</b> cells must be fixed before those cards can be approved — correct them in the Excel and import it again, or edit the student in the exam. <b>Orange</b> cells are only worth a quick look.` : r.warns ? "Nothing must be fixed. <b>Orange</b> cells are only worth a quick look." : "Every row in the Excel looks correct."}</div>`;
     const segs = [["problems", "Need fixing", r.errors], ["warn", "Please check", r.warns], ["all", "All students", r.rows.length]];
     $("#acSeg").innerHTML = segs.map(([k, t, n]) => `<button data-f="${k}" class="${k === filter ? "on" : ""}">${t} <span class="muted">${n}</span></button>`).join("");
     const rows = r.rows.map((x, i) => ({ ...x, n: i + 1 })).filter(x => filter === "all" || (filter === "problems" ? x.issues.some(i => i.level === "error") : x.issues.length && !x.issues.some(i => i.level === "error")));
-    const cell = (x, field, val) => {
+    const cell = (x, field, val, extra = "") => {
       const is = x.issues.filter(i => i.field === field), lv = is.some(i => i.level === "error") ? "bad" : is.length ? "warn" : "";
       const nw = ["sid", "index", "phone", "nic", "papers"].includes(field) ? " nw" : "";
-      return `<td class="${lv}${nw}" title="${esc(is.map(i => i.text).join(" · "))}">${esc(val || "—")}</td>`;
+      return `<td class="${lv}${nw}" title="${esc(is.map(i => i.text).join(" · "))}">${esc(val || "—")}${extra}</td>`;
     };
     $("#acBody").innerHTML = rows.length ? `<div class="card acwrap"><table class="actab">
       <thead><tr><th>#</th><th>Name</th><th>Student no</th><th>Index no</th><th>Email</th><th>Phone</th><th>NIC</th><th>Subjects</th><th>Result</th></tr></thead>
       <tbody>${rows.map(x => `<tr>
-        <td class="n">${x.n}</td>${cell(x, "name", x.c.name)}${cell(x, "sid", x.c.sid)}${cell(x, "index", x.c.index)}${cell(x, "email", x.c.email)}${cell(x, "phone", x.c.phone)}${cell(x, "nic", x.c.nic)}${cell(x, "papers", papers(x.c))}
+        <td class="n">${x.n}</td>${cell(x, "name", x.c.name)}${cell(x, "sid", x.c.sid)}${cell(x, "index", x.c.index)}${cell(x, "email", x.c.email, fromRec(x.c) ? `<small class="fromrec">not in the Excel — from student records</small>` : "")}${cell(x, "phone", x.c.phone)}${cell(x, "nic", x.c.nic)}${cell(x, "papers", papers(x.c))}
         <td class="res">${x.issues.length ? x.issues.map(i => `<div class="${i.level === "error" ? "bad" : "warn"}">${i.level === "error" ? "✕" : "!"} ${esc(i.text)}</div>`).join("") : `<div class="ok">✓ Correct</div>`}</td></tr>`).join("")}</tbody></table></div>`
       : `<div class="card empty-hero"><div class="eh-ic ok">✓</div><b>${filter === "problems" ? "Nothing needs fixing" : filter === "warn" ? "Nothing to check" : "No students"}</b></div>`;
   };
