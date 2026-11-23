@@ -12,12 +12,20 @@
   const T = v => String(v ?? "").replace(/\s+/g, " ").trim();
   const norm = s => T(s).toLowerCase().replace(/^(mr|mrs|ms|miss|dr|prof|rev)\.?\s+/i, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
   // student nos: 2024/A1/3236, 2023/AN1/B1/0123, 2024/A1E/0045 … ; index nos: 25/AP/01/0117
-  // Xero text is normalised first ("2024 / a1 - 3236" → "2024/A1/3236") and the last part compared without leading zeros.
-  const REG = /(?:^|[^0-9A-Z/])(\d{4}(?:\/[A-Z0-9]{1,4}){1,2}\/\d{3,5})(?![0-9/])/g;
-  const IDX = /(?:^|[^0-9A-Z/])(\d{2}\/[A-Z0-9]{1,4}\/\d{1,3}\/\d{2,5})(?![0-9/])/g;
+  // Separators inside a number may be "/", "-" or spaced ("2024 / a1 - 3236"); text around it can use dashes too
+  // ("2026/01/3035 - Kamal Perera"). Found numbers are normalised and compared without leading zeros in the last part.
+  const SEP = "\\s*[/\\-–]\\s*";
+  const REG = new RegExp(`(?:^|[^0-9A-Z/])(\\d{4}(?:${SEP}[A-Z0-9]{1,4}){1,2}${SEP}\\d{3,5})(?![0-9])`, "g");
+  const IDX = new RegExp(`(?:^|[^0-9A-Z/])(\\d{2}${SEP}[A-Z0-9]{1,4}${SEP}\\d{1,3}${SEP}\\d{2,5})(?![0-9])`, "g");
   const canon = s => T(s).toUpperCase().replace(/\s*[/\-–]\s*/g, "/");
+  const findAll = (re, text) => [...T(text).toUpperCase().matchAll(re)].map(m => canon(m[1]));
   const idKey = s => { const p = canon(s).split("/"); if (p.length > 1) p[p.length - 1] = String(+p[p.length - 1] || p[p.length - 1]); return p.join("/"); };
   const MEM = /(?:^|[^A-Z0-9/])(F|A)\s?[-–.]?\s?0*(\d{1,4})(?![\d/])/gi;
+  // "2026/01/3035 - Kamal Perera" → "Kamal Perera" (the person's name without the number around it)
+  const cleanName = n => {
+    const s = T(n).replace(new RegExp(`\\d{4}(?:${SEP}[A-Z0-9]{1,4}){1,2}${SEP}\\d{3,5}`, "gi"), " ").replace(/[()[\]|:]/g, " ").replace(/^[\s\-–,.]+|[\s\-–,.]+$/g, "").replace(/\s+/g, " ").trim();
+    return s || T(n);
+  };
   const memNo = (l, d) => l.toUpperCase() + String(+d).padStart(3, "0");
 
   function buildIndex({ students = [], members = [] }) {
@@ -44,9 +52,9 @@
     const c = inv.contact || {};
     const strong = [c.accountNumber, c.contactNumber, c.name, inv.reference].map(T).join(" | ");
     const all = strong + " | " + (inv.lines || []).join(" | ");
-    const allC = canon(all), regs = [...allC.matchAll(REG)].map(m => m[1]);
+    const regs = findAll(REG, all);
     for (const g of regs) { const r = I.sid.get(idKey(g)); if (r) return { ...r, how: "student no" }; }
-    for (const m of allC.matchAll(IDX)) { const r = I.idx.get(idKey(m[1])); if (r) return { ...r, how: "index no" }; }
+    for (const g of findAll(IDX, all)) { const r = I.idx.get(idKey(g)); if (r) return { ...r, how: "index no" }; }
     const memText = strong + " | " + (inv.lines || []).filter(l => /member|subscri/i.test(l)).join(" | ");
     for (const m of memText.matchAll(MEM)) { const r = I.mem.get(memNo(m[1], m[2])); if (r) return { ...r, how: "membership no" }; }
     const em = T(c.email).toLowerCase();
@@ -54,7 +62,9 @@
     const nm = norm(c.name);
     if (nm && I.name.get(nm)?.length === 1) return { ...I.name.get(nm)[0], how: "name" };
     // a student no that isn't in the app's records yet — still a student who owes, so keep it (no profile to open)
-    if (regs.length) return { kind: "student", key: regs[0], how: "student no (not in records)", unknown: true, contactName: T(c.name) };
+    // (only from the contact / reference, not free-text lines, so dates in descriptions can't pass as numbers)
+    const strongRegs = findAll(REG, strong);
+    if (strongRegs.length) return { kind: "student", key: strongRegs[0], how: "student no (not in records)", unknown: true, contactName: cleanName(c.name) };
     return null;
   }
 
@@ -76,6 +86,6 @@
     return { byKey, unmatched, total, overdue };
   }
 
-  const api = { buildIndex, matchInvoice, summarize };
+  const api = { buildIndex, matchInvoice, summarize, cleanName };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.XeroCore = api;
 })(typeof window !== "undefined" ? window : globalThis);

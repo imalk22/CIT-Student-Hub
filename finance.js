@@ -59,61 +59,44 @@ async function xeroPoll() {
 (async () => { while (!DB) await new Promise(r => setTimeout(r, 200)); setTimeout(xeroPoll, 4000); setInterval(xeroPoll, 120e3); })();
 document.addEventListener("visibilitychange", () => { if (!document.hidden) xeroPoll(); });
 
-function finPeople() {
-  const F = finIndex(); if (!F) return [];
-  const stu = new Map(DB.students.map(s => [s.id, s])), mem = new Map((typeof MEMBERS === "function" ? MEMBERS() : []).map(m => [m.no, m]));
-  return [...F.byKey.values()].map(g => {
-    const p = g.kind === "student" ? stu.get(g.key) : mem.get(g.key);
-    return { ...g, name: p ? ((p.title ? p.title + " " : "") + p.name) : (g.contactName || g.key) + (g.unknown ? " (not in records)" : ""), label: g.kind === "student" ? g.key : MC.prettyNo(g.key) + " · " + (p?.type || "Member"),
-      standing: g.kind === "member" && p ? acct(p).standing.state : "" };
-  });
-}
-
 function renderFinance() {
   const keepQ = $("#finq")?.value || "";
   $$("main > .view").forEach(v => v.classList.add("hide"));
   const box = $("#v-fin"); box.classList.remove("hide");
   const X = DB.xero, F = finIndex(), S = XSTATUS || {};
-  const people = finPeople(), sum = xs => xs.reduce((s, x) => s + x.due, 0);
-  const stu = people.filter(p => p.kind === "student"), mem = people.filter(p => p.kind === "member");
+  const sum = xs => xs.reduce((s, x) => s + x.due, 0);
+  const stu = F ? dueGroups("student") : [], mem = F ? dueGroups("member") : [], unm = F ? unmatchedGroups() : [];
   const onVercel = S.site === "vercel";
   const conn = S.offline ? `<div class="note">Can't reach the Xero service right now.${X ? ` Showing the copy synced ${ago(X.syncedAt)}.` : ""}</div>`
     : onVercel && S.storage === false ? `<div class="note"><b>Storage isn't set up yet.</b> In Vercel → Storage, add <b>Upstash for Redis</b> (free), connect it to this project and redeploy — see README → <i>Xero on the Vercel site</i>.</div>`
     : !S.configured ? `<div class="note"><b>Xero isn't set up yet.</b> Add <code>XERO_CLIENT_ID</code> / <code>XERO_CLIENT_SECRET</code> ${onVercel ? "in Vercel → Settings → Environment Variables and redeploy" : "to <code>.env</code> and restart npm start"} — see README. Redirect URI to register in the Xero app: <code>${esc(S.redirect || "")}</code></div>`
     : !S.connected ? `<div class="xconn"><span>Xero is set up but not connected.</span><a class="btn primary small" href="/xero/connect">Connect to Xero</a></div>`
     : `<div class="xconn"><span>Connected to <b>${esc(S.tenant)}</b> · read-only · updates automatically every ${S.autoEveryMin || 10} min${X ? ` · last ${ago(X.syncedAt)}` : ""}${S.lastError ? ` · <span class="owe">last try failed: ${esc(S.lastError)}</span>` : ""}</span><span style="display:flex;gap:8px"><button class="btn small primary" id="xSync">Sync now</button><button class="btn small" id="xOff">Disconnect</button></span></div>`;
-  const list = finSeg === "student" ? stu : finSeg === "member" ? mem : null;
+  const list = finSeg === "student" ? stu : finSeg === "member" ? mem : unm;
   box.innerHTML = `
     <div class="titlebar"><h1>Finance</h1><span style="display:flex;gap:12px">${X ? `<button class="link" id="xExport">Export to Excel</button>` : ""}${onVercel ? `<a class="link" href="/api/login?logout">Sign out</a>` : ""}</span></div>
     <p class="sub">Outstanding invoices from Xero${X ? ` · ${esc(X.tenant || "")} · synced ${new Date(X.syncedAt).toLocaleString("en-GB")}` : ""}</p>
     ${conn}
-    ${F ? `<div class="kpi4" style="margin-top:14px">
-      <div class="card kpi" style="--ac:var(--red)"><div class="kl">Total outstanding</div><div class="kr"><div class="kv">${rs(F.total)}</div></div><div class="kn">${X.invoices.length} unpaid invoices</div></div>
-      <div class="card kpi" style="--ac:var(--orange)"><div class="kl">Overdue</div><div class="kr"><div class="kv">${rs(F.overdue)}</div></div><div class="kn">past the due date</div></div>
-      <div class="card kpi" style="--ac:var(--blue)"><div class="kl">Students owing</div><div class="kr"><div class="kv">${stu.length}</div><span class="kd">${rs(sum(stu))}</span></div><div class="kn">matched by student / index no</div></div>
-      <div class="card kpi" style="--ac:#d4a537"><div class="kl">Members owing</div><div class="kr"><div class="kv">${mem.length}</div><span class="kd">${rs(sum(mem))}</span></div><div class="kn">${F.unmatched.length} invoice${F.unmatched.length === 1 ? "" : "s"} not matched · ${rs(sum(F.unmatched))}</div></div>
+    ${F ? `<div class="dkpis">
+      <div class="dkpi red"><small>Total unpaid</small><b>${rs(F.total)}</b><span>${X.invoices.length.toLocaleString()} invoices in Xero</span></div>
+      <div class="dkpi orange"><small>Overdue</small><b>${rs(F.overdue)}</b><span>past the due date</span></div>
+      <div class="dkpi blue"><small>Students</small><b>${rs(sum(stu))}</b><span>${plural(stu.length, "student")} owing</span></div>
+      <div class="dkpi"><small>Members</small><b>${rs(sum(mem))}</b><span>${plural(mem.length, "member")} owing</span></div>
     </div>
-    <div class="seg" id="finSeg" style="margin-top:14px">${[["student", "Students", stu.length], ["member", "Members", mem.length], ["none", "Not matched", F.unmatched.length]].map(([k, t, n]) => `<button data-s="${k}" class="${k === finSeg ? "on" : ""}">${t} <span class="muted">${n}</span></button>`).join("")}</div>
-    <div class="search" style="margin-top:12px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="finq" type="search" placeholder="Filter by name, number or invoice" autocomplete="off"></div>
+    ${unm.length ? `<div class="note">${plural(F.unmatched.length, "invoice")} (${rs(sum(F.unmatched))}) from ${plural(unm.length, "Xero contact")} couldn't be linked to a student or member. Put the student / membership no in the contact's <b>Account number</b> (or name) in Xero and they'll match on the next sync.</div>` : ""}
+    <div class="seg" id="finSeg" style="margin-top:14px">${[["student", "Students", stu.length], ["member", "Members", mem.length], ["none", "Not matched", unm.length]].map(([k, t, n]) => `<button data-s="${k}" class="${k === finSeg ? "on" : ""}">${t} <span class="muted">${n}</span></button>`).join("")}</div>
+    <div class="dtools"><div class="search dsearch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="finq" type="search" placeholder="Search name, number or invoice" autocomplete="off"></div></div>
     <div class="listhead"><span id="finCount"></span></div>
-    <div class="card list" id="finList"></div>` : !S.offline && S.connected ? `<div class="card empty-hero" style="margin-top:14px"><b>Not synced yet</b><span>Press Sync now to read the outstanding invoices.</span></div>` : ""}`;
-  const invRow = i => `<div class="xinv ${i.late ? "late" : ""}"><span><b>${esc(i.number || "Invoice")}</b>${i.reference ? " · " + esc(i.reference) : ""}<small>${esc(i.lines?.[0] || "")}</small></span>
-    <span class="muted">${fmtDay(i.date)}${i.dueDate ? ` · due ${fmtDay(i.dueDate)}` : ""}</span><b class="${i.late ? "owe" : ""}">${rs(i.due)}</b></div>`;
+    <div class="dgrid" id="finList"></div>` : !S.offline && S.connected ? `<div class="card empty-hero" style="margin-top:14px"><b>Not synced yet</b><span>Press Sync now to read the outstanding invoices.</span></div>` : ""}`;
   const draw = () => {
     if (!F) return;
     const q = norm($("#finq").value);
-    if (list) {
-      const rows = list.filter(p => !q || norm(p.name + " " + p.key + " " + p.label + " " + p.invoices.map(i => i.number + " " + i.reference).join(" ")).includes(q)).sort((a, b) => b.due - a.due);
-      $("#finCount").textContent = `${rows.length} ${finSeg === "student" ? "student" : "member"}${rows.length === 1 ? "" : "s"} · ${rs(sum(rows))}`;
-      $("#finList").innerHTML = rows.slice(0, 300).map(p => `<details class="acrow"><summary><span class="t"><b>${esc(p.name)}</b><span>${esc(p.label)} · ${p.count} invoice${p.count === 1 ? "" : "s"}${p.oldest ? ` · oldest due ${fmtDay(p.oldest)}` : ""}</span></span>
-        ${p.standing === "terminated" ? `<span class="chip c-red">Terminated</span>` : p.standing === "suspended" ? `<span class="chip c-orange">Suspended</span>` : ""}${p.overdue ? `<span class="chip c-orange">${rs(p.overdue)} overdue</span>` : ""}<span class="stamt">${rs(p.due)}</span></summary>
-        <div class="acdet">${p.invoices.map(invRow).join("")}${p.kind === "member" ? `<button class="link" data-key="${esc(p.key)}">Open member ›</button>` : ""}</div></details>`).join("") || `<div class="empty">Nothing outstanding.</div>`;
-      $$("#finList [data-key]").forEach(b => b.onclick = () => openMember(b.dataset.key));
-    } else {
-      const rows = F.unmatched.filter(i => !q || norm(i.contact.name + " " + i.number + " " + i.reference + " " + i.contact.accountNumber).includes(q)).sort((a, b) => b.due - a.due);
-      $("#finCount").textContent = `${rows.length} invoice${rows.length === 1 ? "" : "s"} · ${rs(sum(rows))} — add the student / membership no to the Xero contact's account number to match them`;
-      $("#finList").innerHTML = rows.slice(0, 300).map(i => `<div class="row"><span class="t"><b>${esc(i.contact.name || "No contact")}</b><span>${esc([i.contact.accountNumber, i.contact.email].filter(Boolean).join(" · ") || "no account number")}</span></span></div>${invRow(i)}`).join("") || `<div class="empty">Every invoice is matched.</div>`;
-    }
+    const rows = list.filter(d => !q || norm(d.name + " " + d.key + " " + d.sub + " " + d.inv.map(i => i.number + " " + i.reference + " " + i.contact.accountNumber).join(" ")).includes(q))
+      .sort((a, b) => b.overdue - a.overdue || b.due - a.due);
+    const what = finSeg === "student" ? "student" : finSeg === "member" ? "member" : "Xero contact";
+    $("#finCount").textContent = `${plural(rows.length, what)} · ${rs(sum(rows))}${rows.length > 200 ? " · showing the first 200 — search to narrow down" : ""}`;
+    $("#finList").innerHTML = rows.slice(0, 200).map(d => dueCardHtml(d)).join("") || `<div class="card empty dg-full">${finSeg === "none" ? "Every invoice is matched." : "Nothing outstanding."}</div>`;
+    bindDueCards($("#finList"), rows);
   };
   if ($("#finq")) $("#finq").value = keepQ;
   draw();
@@ -125,9 +108,9 @@ function renderFinance() {
     await fetch("/api/xero/disconnect", { method: "POST" }).catch(() => { }); await xeroStatus(); renderFinance();
   };
   if ($("#xExport")) $("#xExport").onclick = () => {
-    const P = new Map(finPeople().flatMap(p => p.invoices.map(i => [i.id, p])));
+    const P = new Map([...stu, ...mem].flatMap(d => d.inv.map(i => [i.id, d])));
     const rows = X.invoices.map(i => { const p = P.get(i.id); return {
-      "Matched to": p ? (p.kind === "student" ? "Student" : "Member") : "Not matched", "Student / member no": p ? (p.kind === "member" ? MC.prettyNo(p.key) : p.key) : "", Name: p?.name || "",
+      "Matched to": p ? (p.kind === "student" ? "Student" : "Member") : "Not matched", "Student / member no": p ? p.sub.split(" · ")[0] : "", Name: p?.name || "",
       "Xero contact": i.contact.name, "Account no": i.contact.accountNumber, Invoice: i.number, Reference: i.reference, Date: i.date, "Due date": i.dueDate,
       Total: i.total, Paid: i.paid, "Amount due": i.due, Description: (i.lines || []).join("; ") }; });
     xlsxDownload(rows, "Outstanding", `xero-outstanding-${new Date().toISOString().slice(0, 10)}.xlsx`);
