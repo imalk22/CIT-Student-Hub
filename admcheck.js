@@ -11,7 +11,6 @@ function admCtx() {
     const st = c.sid ? byId.get(String(c.sid).toLowerCase()) || null : null;
     return {
       student: st,
-      renewal: st && typeof studentRenewal === "function" && DB.renewals?.length ? studentRenewal(st) : null,
       finance: st && typeof xeroFor === "function" ? xeroFor("student", st.id) : null,
     };
   };
