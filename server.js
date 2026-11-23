@@ -117,7 +117,7 @@ async function makePdf(pagesHtml) {
 
 /* ---------- helpers ---------- */
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".md": "text/plain; charset=utf-8" };
-const BLOCK = /^(node_modules|outbox|data-files|_test|ref\/|\.env|server\.js|package(-lock)?\.json|\.git)/i;
+const BLOCK = /^(node_modules|outbox|data-files|_test|ref\/|\.env|server\.js|xero-server\.js|xero-tokens|package(-lock)?\.json|\.git)/i;
 function send(res, code, body, type = "application/json; charset=utf-8") {
   res.writeHead(code, { "Content-Type": type, "Cache-Control": "no-store" });
   res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body));
@@ -182,10 +182,14 @@ async function citslMembers(force) {
   }
 }
 
+/* ---------- Xero (read-only: outstanding invoices) ---------- */
+const xeroHandle = require("./xero-server")({ ROOT, PORT, send });
+
 /* ---------- server ---------- */
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   try {
+    if (await xeroHandle(req, res, url)) return;
     if (url.pathname === "/api/health") {
       return send(res, 200, { ok: true, mode: MODE, from: FROM, pdf: !!BROWSER, outbox: LIVE ? null : "outbox" });
     }
@@ -245,6 +249,7 @@ server.listen(PORT, HOST, () => {
   console.log(`\n  CIT Student Hub  →  http://localhost:${PORT}`);
   console.log(`  Email: ${GRAPH ? "Microsoft 365 (Graph) as " + FROM : SMTP ? "SMTP " + process.env.SMTP_HOST + " as " + FROM : "TEST MODE — emails are saved to ./outbox (add Microsoft 365 or SMTP settings to .env to send for real)"}`);
   if (GRAPH) getGraphToken().then(() => console.log("  Microsoft 365: signed in OK\n")).catch(e => console.log("  Microsoft 365: " + e.message + "\n"));
-  console.log(`  PDF:   ${BROWSER || "no browser found — set BROWSER_PATH"}\n`);
+  console.log(`  PDF:   ${BROWSER || "no browser found — set BROWSER_PATH"}`);
+  console.log(`  Xero:  ${process.env.XERO_CLIENT_ID ? (fs.existsSync(path.join(ROOT, "xero-tokens.json")) ? "connected (read-only)" : "set up — open Finance → Connect to Xero") : "not set up (see README → Xero setup)"}\n`);
 });
 process.on("SIGINT", async () => { try { (await browserP)?.close(); } catch { } process.exit(0); });

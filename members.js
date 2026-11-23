@@ -88,12 +88,19 @@ function editRates() {
   };
 }
 MSTATE.honorary =["Honorary · no fee", "purple"]; MSTATE.norecord = ["Not in fee report", "gray"];
+const standingRules = () => ({ ...MC.DEFAULT_STANDING, ...(DB.settings?.standing || {}) });
 const acct = m => {
   const a = MC.account(m, CUR_YEAR());
   if (m.honorary) a.status = "honorary"; else if (m.noFeeRecord) a.status = "norecord";
+  a.standing = MC.standing(m, CUR_YEAR(), standingRules());
   return a;
 };
-function memberStatusChip(m) { const a = acct(m), [t, c] = MSTATE[a.status]; return `<span class="chip c-${c}">${a.status === "current" ? CUR_YEAR() + " due" : t}</span>`; }
+function memberStatusChip(m) {
+  const a = acct(m);
+  if (a.standing.state === "terminated") return `<span class="chip c-red" title="${a.standing.count} unpaid years">Terminated</span>`;
+  if (a.standing.state === "suspended") return `<span class="chip c-orange" title="${a.standing.count} unpaid years — no slip until cleared">Suspended · ${a.standing.count} yrs</span>`;
+  const [t, c] = MSTATE[a.status]; return `<span class="chip c-${c}">${a.status === "current" ? CUR_YEAR() + " due" : t}</span>`;
+}
 function yearDots(m) {
   return `<span class="ydots">${m.years.map(y => `<i class="yd ${y.state}" title="${esc(yLabel(y))}: ${y.state === "waived" ? "W/O" : y.state === "none" ? "—" : y.due ? "due " + rs(y.due) : "paid"}"></i>`).join("")}</span>`;
 }
@@ -113,7 +120,9 @@ function filteredMembers() {
       case "new": return a.status === "new";
       case "deceased": return a.status === "deceased";
       case "honorary": return a.status === "honorary";
-      default: return a.status !== "deceased";
+      case "suspended": return a.standing.state === "suspended";
+      case "terminated": return a.standing.state === "terminated";
+      default: return a.status !== "deceased" && a.standing.state !== "terminated";
     }
   });
   if (q) list = list.filter(m => m.no.toLowerCase() === ql.replace(/[\s-]/g, "") || MC.normNo(q) === m.no || m.assocNo === MC.normNo(q) ||
@@ -143,7 +152,7 @@ function renderMembers() {
   const maxExp = Math.max(1, ...years.map(y => y.expected));
   const pays = (FR.payments || []).filter(p => mType === "All" || (p.no[0] === (mType === "Fellow" ? "F" : "A"))).slice().sort((a, b) => b.date.localeCompare(a.date));
   const hon = MEMBERS().filter(m => m.honorary).length;
-  const chips = [["all", "All active"], ["owing", "Owing"], ["current", `${CY} unpaid`], ["arrears", "Arrears"], ["paid", "Paid up"], ["waived", "W/O"], ["new", "New"], ["deceased", "Deceased"], ...(hon ? [["honorary", "Honorary"]] : [])];
+  const chips = [["all", "All active"], ["owing", "Owing"], ["current", `${CY} unpaid`], ["arrears", "Arrears"], ["paid", "Paid up"], ["waived", "W/O"], ["new", "New"], ["suspended", "Suspended"], ["terminated", "Terminated"], ["deceased", "Deceased"], ...(hon ? [["honorary", "Honorary"]] : [])];
   box.innerHTML = `
     <div class="titlebar"><h1>Members</h1><label class="btn small">Update Excel<input type="file" id="memFile" accept=".xlsx,.xls" hidden></label></div>
     <p class="sub">Membership year <b>${CY}</b>${FR.file ? ` · ${esc(FR.file)} · imported ${new Date(FR.importedAt).toLocaleDateString("en-GB")}` : " · fee report not imported yet"}${WEB ? ` · photos from citsl.lk${WEB.live ? "" : " (saved copy)"}` : ""}</p>
@@ -189,6 +198,7 @@ function renderMembers() {
         <div class="plist">${pays.slice(0, 7).map(p => `<button class="prow" data-no="${esc(p.no)}"><span class="pd">${esc(p.date ? new Date(p.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "")}</span>
           <span class="pn2"><b>${esc(MC.prettyNo(p.no))} · ${esc(p.name || MEMBERS().find(m => m.no === p.no)?.name || "")}</b><small>${esc(p.remark || p.method)}</small></span><span class="pa">${rs(p.amount)}</span></button>`).join("") || `<div class="empty">No payment log yet.</div>`}</div></div>
     </div>
+    ${standingCard(all)}
     ${ratesCard()}
     </div>
 
@@ -211,6 +221,7 @@ function renderMembers() {
   $("#mSort").onchange = e => { mSort = e.target.value; renderMemberList(); };
   $("#mExport").onclick = exportMembers;
   if ($("#editRates")) $("#editRates").onclick = editRates;
+  $$("#v-mem [data-stand]").forEach(b => b.onclick = () => openStanding(b.dataset.stand));
   $$("#v-mem .prow").forEach(b => b.onclick = () => openMember(b.dataset.no));
   bindMemDrop();
   fx($("#v-mem"), ".none");
@@ -238,7 +249,7 @@ function exportMembers() {
   const CY = CUR_YEAR(), rows = filteredMembers().map(m => { const a = acct(m), r = {
     "Membership No": MC.prettyNo(m.no), "Type": m.type, "Title": m.title, "Name": m.name, "Email": m.email, "Phone": m.phone,
     "Status": MSTATE[a.status][0], [`${CY} fee`]: a.currentFee, [`${CY} paid`]: a.currentPaid, [`${CY} due`]: a.current, "Arrears": a.arrears, "Total outstanding": a.total,
-    "Years unpaid": a.unpaidYears.join(", ") }; return r; });
+    "Years unpaid": a.unpaidYears.join(", "), "Standing": { suspended: "Suspended", terminated: "Terminated", good: "Good", na: "" }[a.standing.state] }; return r; });
   if (!rows.length) return toast("Nothing to export");
   xlsxDownload(rows, "Members", `members-${mFilter}-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
@@ -320,6 +331,7 @@ function renderMemberProfile(m) {
           <a class="btn small" href="https://citsl.lk/${m.type === "Fellow" ? "fellow" : "associate"}-members" target="_blank" rel="noopener">citsl.lk ↗</a>
         </div></div>
     </div>
+    ${standingBanner(m, a)}
     ${sheetNote}
     <div class="mmoney">
       <div class="card"><small>${CY} fee</small><b>${a.status === "waived" ? "W/O" : rs(a.currentFee)}</b><span>${a.currentPaid ? "paid " + rs(a.currentPaid) : a.status === "waived" ? "waived" : "not paid"}</span></div>
@@ -366,6 +378,8 @@ addEventListener("keydown", e => {
 /* ---------- wire into navigation ---------- */
 const _tab = tab;
 tab = function (name) {
+  if (name === "mstand") { $("#v-mem").classList.add("hide"); $("#v-mprof").classList.add("hide"); return renderStandingView(); }
+  $("#v-mstand").classList.add("hide");
   if (name === "mem" || name === "mprof") {
     $$("main > .view").forEach(v => v.classList.add("hide"));
     $("#v-mem").classList.remove("hide"); currentTab = "mem";

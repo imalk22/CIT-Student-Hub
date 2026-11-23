@@ -406,3 +406,45 @@ a.btn{text-decoration:none}
 .lg-flag{margin-top:6px;font-size:10.5px;font-weight:700;color:var(--blue);background:rgba(10,132,255,.1);border-radius:6px;padding:3px 6px;line-height:1.3}
 .lg-flag.warn{color:#c77700;background:rgba(255,159,10,.15)}
 #rtEdit .inp{max-width:130px}
+
+/* ---------- admission details check ---------- */
+.ck.warn{background:rgba(255,159,10,.16);color:#c77700}
+.acbanner{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;border:0;border-radius:14px;padding:12px 14px;margin:0 0 10px;background:var(--fill2)}
+.acbanner b{font-size:15px}.acbanner span{font-size:13px;color:var(--muted)}
+.acbanner.ok{background:rgba(52,199,89,.12)}.acbanner.ok b{color:#1f9d45}
+.acbanner.warn{background:rgba(255,159,10,.13)}.acbanner.warn b{color:#c77700}
+.acbanner.bad{background:rgba(255,59,48,.11)}.acbanner.bad b{color:#e0352b}
+.acrow{border-bottom:.5px solid var(--line)}.acrow:last-child{border-bottom:0}
+.acrow>summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 0;cursor:pointer;list-style:none}
+.acrow>summary::-webkit-details-marker{display:none}
+.acrow .t{flex:1 1 220px;min-width:0}.acrow .t b{display:block;font-weight:600}.acrow .t span{display:block;color:var(--muted);font-size:13px}
+.acchips{display:flex;flex-wrap:wrap;gap:6px;flex:2 1 300px}
+.acdet{padding:0 0 12px}
+.actable{width:100%;border-collapse:collapse;font-size:13.5px;margin-bottom:6px}
+.actable th,.actable td{text-align:left;padding:6px 8px;border-bottom:.5px solid var(--line);word-break:break-word}
+.actable th{color:var(--muted);font-weight:600;font-size:12px}
+.actable tr.diff td{background:rgba(255,159,10,.12)}
+
+/* ---------- member standing ---------- */
+.standcard{margin-top:14px;padding-bottom:14px}
+.stand2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stbox{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:0;border-radius:14px;padding:12px 14px;background:var(--fill2)}
+.stbox small{font-weight:600;font-size:12.5px}.stbox b{font-size:26px;font-variant-numeric:tabular-nums}.stbox span{font-size:12.5px;color:var(--muted)}
+.stbox.sus small,.stbox.sus b{color:#c77700}.stbox.ter small,.stbox.ter b{color:var(--red)}
+.standban{display:flex;flex-direction:column;gap:2px;border-radius:14px;padding:12px 14px;margin:12px 0}
+.standban b{font-size:15px}.standban span{font-size:13.5px}
+.standban.sus{background:rgba(255,159,10,.14)}.standban.sus b{color:#c77700}
+.standban.ter{background:rgba(255,59,48,.12)}.standban.ter b{color:var(--red)}
+.stamt{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (max-width:520px){.stand2{grid-template-columns:1fr}}
+
+/* ---------- finance (Xero) ---------- */
+.xconn{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:var(--fill2);border-radius:14px;padding:12px 14px;margin:10px 0;font-size:14px}
+.xcard{margin-top:12px;padding-bottom:10px}
+.xtot{display:flex;align-items:baseline;gap:10px;padding:4px 0 8px}.xtot b{font-size:22px}.xtot span{color:var(--muted);font-size:13.5px}
+.xtot .ok{color:var(--green)}
+.xinv{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:6px 14px;padding:9px 0;border-top:.5px solid var(--line);font-size:14px}
+.xinv small{display:block;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46ch}
+.xinv>b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.xinv.late>b,.owe{color:var(--red)}
+@media (max-width:520px){.xinv{grid-template-columns:1fr auto}.xinv>.muted{grid-column:1/-1;order:3;font-size:12.5px}}
