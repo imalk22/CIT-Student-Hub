@@ -6,8 +6,9 @@
   "use strict";
   const T = v => String(v ?? "").replace(/\s+/g, " ").trim();
   const low = v => T(v).toLowerCase();
-  const REG = /\b(\d{4}\/[A-Z0-9]{1,4}\/\d{3,5})\b/i;
-  const normReg = s => { const m = T(s).match(REG); return m ? m[1].toUpperCase() : ""; };
+  // student nos: 2026/CTT/4047, 2024/A1/3236, 2023/AN1/B1/0123 — also typed with spaces or dashes ("2026 - CTT - 4047")
+  const REG = /\b(\d{4}(?:\s*[/\-–]\s*[A-Z0-9]{1,4}){1,2}\s*[/\-–]\s*\d{3,5})\b/i;
+  const normReg = s => { const m = T(s).match(REG); return m ? m[1].toUpperCase().replace(/\s*[/\-–]\s*/g, "/") : ""; };
   const normMem = s => {
     const m = T(s).toUpperCase().match(/^(HF|F|A)\s*[-–.]?\s*0*(\d{1,4})$/);
     return m ? m[1] + String(+m[2]).padStart(3, "0") : "";

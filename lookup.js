@@ -18,12 +18,16 @@ function rememberContact(c) {
 }
 
 /* ---------------- search ---------------- */
+// student / index numbers typed any way: "2026 / CTT - 4047", "2026/ctt/04047" all mean 2026/CTT/4047
+const idCanon = s => String(s ?? "").trim().toLowerCase().replace(/\s*[/\-–]\s*/g, "/");
+const idKey = s => { const p = idCanon(s).split("/"); if (p.length > 1 && /^\d+$/.test(p.at(-1))) p[p.length - 1] = String(+p.at(-1)); return p.join("/"); };
+const looksLikeStudentNo = q => /^\d{4}(\/[a-z0-9]{1,4}){1,2}\/\d{3,5}$/.test(idCanon(q));
 const HAY = new WeakMap();
 function hay(s) {
   let h = HAY.get(s);
   if (!h) {
     const ct = s.contact || {};
-    h = { name: norm(s.name), ids: [s.id, ...s.index_nos].map(x => x.toLowerCase()), nic: String(ct.nic || "").toLowerCase(),
+    h = { name: norm(s.name), ids: [s.id, ...s.index_nos].map(x => x.toLowerCase()), idKeys: [s.id, ...s.index_nos].map(idKey), nic: String(ct.nic || "").toLowerCase(),
       email: String(ct.email || "").toLowerCase(), phones: [ct.phone, ct.whatsapp].filter(Boolean).map(phoneKey), initials: norm(ct.initials || "") };
     HAY.set(s, h);
   }
@@ -32,10 +36,12 @@ function hay(s) {
 function searchStudents(q, limit = 8) {
   q = q.trim(); if (!q) return [];
   const ql = q.toLowerCase(), toks = norm(q).split(" ").filter(Boolean), dq = digits(q);
+  const idq = idCanon(q), idk = idKey(q);   // "2026 - CTT - 04047" → "2026/ctt/04047" / "2026/ctt/4047"
   const out = [];
   for (const s of DB.students) {
     const h = hay(s); let score = 0, why = "";
-    if (h.ids.includes(ql)) { score = 100; why = "Exact number"; }
+    if (h.ids.includes(ql) || (/\//.test(idq) && (h.ids.includes(idq) || h.idKeys.includes(idk)))) { score = 100; why = "Exact number"; }
+    else if (/\//.test(idq) && idq.length >= 5 && h.ids.some(i => i.includes(idq))) { score = 72; why = "Number"; }
     else if (h.nic && h.nic === ql) { score = 100; why = "NIC"; }
     else if (h.email && h.email === ql) { score = 100; why = "Email"; }
     else if (dq.length >= 9 && h.phones.includes(phoneKey(dq))) { score = 95; why = "Phone"; }
@@ -134,7 +140,9 @@ function renderHomeResults() {
   homeSel = 0;
   $("#hres").innerHTML = hits.length
     ? `<div class="hres-head">${total} match${total === 1 ? "" : "es"}${total > hits.length ? ` · showing the best ${hits.length}` : ""} <span>↵ opens the first</span></div><div class="hits">${hits.map((h, i) => resultCard(h.s, q, h.why, i)).join("")}</div>`
-    : `<div class="card empty-hero"><div class="eh-ic">?</div><b>No student matches “${esc(q)}”</b><span>Try part of the name, the student number (e.g. 2026/01/3856), an index number, NIC, phone or email.</span></div>`;
+    : looksLikeStudentNo(q)
+      ? `<div class="card empty-hero"><div class="eh-ic">?</div><b>${esc(idCanon(q).toUpperCase())} isn't in the student records yet</b><span>The number looks right, but no imported file has this student. New students appear after their Course Registration Master (or results file) is imported on the Data tab — or put it in the data-files folder and refresh.</span></div>`
+      : `<div class="card empty-hero"><div class="eh-ic">?</div><b>No student matches “${esc(q)}”</b><span>Try part of the name, the student number (e.g. 2026/CTT/4047 or 2026/01/3856), an index number, NIC, phone or email.</span></div>`;
   $$("#hres .hit").forEach(h => h.classList.add("tilt"));
   markSel();
 }

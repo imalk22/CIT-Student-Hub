@@ -134,7 +134,7 @@ function parseCandidates(e, header, body) {
   for (const r of body) {
     const name = get(r, "name"); if (!name) continue;
     const sid = get(r, "sid"), idx = get(r, "index"), L = x => x.toLowerCase();
-    const st = (sid && DB.students.find(s => L(s.id) === L(sid))) || (idx && DB.students.find(s => s.index_nos.some(i => L(i) === L(idx)))) || DB.students.find(s => norm(s.name) === norm(name)) || null;
+    const st = (sid && DB.students.find(s => idKey(s.id) === idKey(sid))) || (idx && DB.students.find(s => s.index_nos.some(i => idKey(i) === idKey(idx)))) || DB.students.find(s => norm(s.name) === norm(name)) || null;
     const info = { title: get(r, "title"), initials: get(r, "initials"), email: get(r, "email").replace(/\s+/g, ""), phone: get(r, "phone"), whatsapp: get(r, "whatsapp"), nic: get(r, "nic") };
     const prev = st ? { name: st.name, email: st.contact?.email || "", phone: st.contact?.phone || "", nic: st.contact?.nic || "" } : null;
     if (st) {
