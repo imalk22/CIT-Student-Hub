@@ -14,7 +14,13 @@ checkServer();
 
 async function pdfDownload(pages, filename) {
   await checkServer();
-  if (!SERVER?.pdf) return printPages(pages);
+  if (!SERVER?.pdf) {   // website: make the PDF in the browser
+    busy(true); toast(pages.length > 6 ? `Making a ${pages.length}-page PDF…` : "Making PDF…");
+    try { download(filename, await pagesToPdf(pages)); toast("PDF downloaded"); }
+    catch (e) { toast("PDF failed: " + e.message); printPages(pages); }
+    finally { busy(false); }
+    return;
+  }
   busy(true); toast(pages.length > 6 ? `Making a ${pages.length}-page PDF…` : "Making PDF…");
   try {
     const r = await fetch("/api/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ html: pages.join(""), filename }) });
@@ -342,73 +348,167 @@ function textToHtml(t) {
     ${esc(t).replace(/\n/g, "<br>")}</div>`;
 }
 let SENDING = null;
+/* email ONE candidate their card (PDF named by student number). Used by "Send" on each box and by "Send all". */
+async function sendOne(e, c) {
+  const text = fillTemplate(e.emailBody, e, c), filename = cardFileName(c);
+  // office server renders the PDF itself; on the website the browser makes it and sends it along
+  const attachment = SERVER.pdf ? { filename, html: cardPages(e, c).join("") } : { filename, base64: await blobToBase64(await cardPdfBlob(e, c)) };
+  const r = await fetch("/api/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+    to: c.email.trim(), cc: e.emailCc || undefined, subject: fillTemplate(e.emailSubject, e, c), text, html: textToHtml(text), attachments: [attachment] }) });
+  const j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
+  if (!r.ok || !j.ok) throw new Error(j.error || "Server error");
+  Object.assign(c, { state: "sent", sentAt: Date.now(), error: "", outdated: false, sentMode: j.mode, sentTo: c.email.trim(), sentFile: filename });
+  return j;
+}
+
+/* Email step: one box per student (name, student no, email, their PDF, their own Send button) + Send all */
 async function openSend(e) {
   await checkServer();
   e.emailSubject ||= DEFAULT_SUBJECT; e.emailBody ||= DEFAULT_BODY;
+  let filter = "all", q = "";
+  const canSend = () => SERVER && SERVER.mode !== "none";
+  const live = () => SERVER?.mode !== "test";
+  const busyIds = new Set();
+  const when = t => new Date(t).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const box = c => {
+    const st = c.state || "draft", file = cardFileName(c), b = busyIds.has(c.id), mailOk = isEmail(c.email);
+    const sendLbl = st === "sent" ? "Resend" : st === "approved" || st === "failed" ? "Send" : "Approve & send";
+    return `<div class="sbox st-${st}" data-c="${esc(c.id)}">
+      <div class="sb-top"><span class="dc-av" style="background:${color(c.name || "?")}">${esc(initials(c.name || "?") || "?")}</span>
+        <span class="sb-id"><b>${esc(c.name || "No name")}</b><span class="dc-no">${esc(c.sid || "no student no")}</span></span>${stateChip(c)}</div>
+      <div class="sb-rows">
+        <div><small>Index no</small><span>${esc(c.index || "—")}</span></div>
+        <div><small>Email</small><span class="${mailOk ? "" : "danger"}">${esc(c.email || "no email")}</span></div>
+      </div>
+      <div class="sb-file">📄 <span>${esc(file)}</span></div>
+      ${st === "sent" ? `<div class="sb-note ok">✓ Emailed ${when(c.sentAt)}${c.sentMode === "test" ? " (test — saved to outbox)" : ""} to ${esc(c.sentTo || c.email)}</div>` : ""}
+      ${st === "failed" ? `<div class="sb-note bad">! ${esc(c.error || "Failed")}</div>` : ""}
+      ${st === "flagged" ? `<div class="sb-note bad">Flagged${c.note ? ": " + esc(c.note) : ""}</div>` : ""}
+      <div class="sb-acts">
+        <button class="btn small" data-a="view">View</button>
+        <button class="btn small" data-a="pdf">PDF</button>
+        <span style="flex:1"></span>
+        <button class="btn small primary" data-a="send" ${b || !mailOk || !canSend() || st === "flagged" ? "disabled" : ""}>${b ? '<span class="spin"></span> Sending…' : sendLbl}</button>
+      </div>
+    </div>`;
+  };
   const draw = () => {
-    const ready = e.candidates.filter(c => c.state === "approved");
-    const noMail = ready.filter(c => !isEmail(c.email)).length;
+    const ready = e.candidates.filter(c => c.state === "approved"), noMail = ready.filter(c => !isEmail(c.email)).length;
     const failed = countState(e, "failed"), sent = countState(e, "sent"), waiting = countState(e, "draft") + countState(e, "flagged");
     const sample = ready[0] || e.candidates[0];
-    const srv = !SERVER ? `<div class="srv bad"><b>Email server is not running.</b> Open a terminal in the student-hub folder and run <code>npm start</code>, then reopen this page from http://localhost:5173.</div>`
-      : SERVER.mode === "test" ? `<div class="srv test"><b>Test mode.</b> Emails are saved to the <code>outbox</code> folder with the PDF attached. Nothing reaches students until SMTP is set up in <code>.env</code>.</div>`
-        : `<div class="srv ok"><b>Ready to send</b> from ${esc(SERVER.from)}${SERVER.mode === "graph" ? " via Microsoft 365 — copies are kept in its Sent Items" : ""}.</div>`;
-    $("#sheet").innerHTML = `<div class="grab"></div><div class="bar-top"><b style="font-size:17px">Email admission cards</b>${closeBtn}</div>
+    const srv = SERVER?.site === "vercel" && SERVER.mode === "none" ? `<div class="srv bad"><b>Email isn't set up on the website yet.</b> Add the Microsoft 365 settings (<code>MS_TENANT_ID</code>, <code>MS_CLIENT_ID</code>, <code>MS_CLIENT_SECRET</code>, <code>MS_SENDER</code>) in Vercel → Settings → Environment Variables and redeploy. You can still view and download every PDF.</div>`
+      : !SERVER ? `<div class="srv bad"><b>Email server is not running.</b> Open a terminal in the student-hub folder and run <code>npm start</code>, then reopen this page from http://localhost:5173.</div>`
+      : SERVER.mode === "test" ? `<div class="srv test"><b>Test mode.</b> Emails are saved to the <code>outbox</code> folder with the PDF attached. Nothing reaches students until email is set up.</div>`
+      : `<div class="srv ok"><b>Ready to send</b> from ${esc(SERVER.from)}${SERVER.mode === "graph" ? " via Microsoft 365 — copies are kept in its Sent Items" : ""}.</div>`;
+    const qq = norm(q);
+    const list = e.candidates.filter(c => (filter === "all" || (filter === "ready" ? c.state === "approved" : filter === "sent" ? c.state === "sent" : filter === "failed" ? c.state === "failed" : !c.state || c.state === "draft" || c.state === "flagged"))
+      && (!qq || norm(c.name + " " + c.sid + " " + c.index + " " + c.email).includes(qq)));
+    $("#sheet").innerHTML = `<div class="grab"></div><div class="bar-top"><div><b style="font-size:17px">Email admission cards</b><div class="muted">${esc(e.heading || e.level)}</div></div>${closeBtn}</div>
       ${srv}
-      <div class="imp-sum"><div><b>${ready.length}</b><span>approved, ready</span></div><div><b>${sent}</b><span>emailed</span></div><div><b class="${failed ? "danger" : ""}">${failed}</b><span>failed</span></div><div><b>${waiting}</b><span>not approved yet</span></div></div>
-      ${noMail ? `<div class="note">${noMail} approved card${noMail === 1 ? " has" : "s have"} no valid email and will be skipped.</div>` : ""}
-      <small class="k">Message</small>
-      <div class="card form">
-        <div class="field stack"><label>Subject</label><input class="inp" id="mSub" value="${esc(e.emailSubject)}"></div>
-        <div class="field stack"><label>Body <span class="muted">· {name} {title} {index} {exam} {level} {subjects} {timetable}</span></label><textarea id="mBody" rows="12">${esc(e.emailBody)}</textarea></div>
-        <div class="field"><label>Copy to (CC)</label><input id="mCc" type="email" value="${esc(e.emailCc || "")}" placeholder="optional, e.g. exams office"></div>
+      <div class="imp-sum"><div><b>${ready.length}</b><span>approved, ready</span></div><div><b style="color:var(--green)">${sent}</b><span>emailed</span></div><div><b class="${failed ? "danger" : ""}">${failed}</b><span>failed</span></div><div><b>${waiting}</b><span>not approved yet</span></div></div>
+      <details class="mprev msgbox"><summary>Message &amp; subject <span class="muted">· same for everyone, with their own details filled in</span></summary>
+        <div class="card form" style="margin-top:8px">
+          <div class="field stack"><label>Subject</label><input class="inp" id="mSub" value="${esc(e.emailSubject)}"></div>
+          <div class="field stack"><label>Body <span class="muted">· {name} {title} {index} {exam} {level} {subjects} {timetable}</span></label><textarea id="mBody" rows="10">${esc(e.emailBody)}</textarea></div>
+          <div class="field"><label>Copy to (CC)</label><input id="mCc" type="email" value="${esc(e.emailCc || "")}" placeholder="optional, e.g. exams office"></div>
+        </div>
+        ${sample ? `<div class="mbox" style="margin-top:8px"><div class="mto">Preview for ${esc(sample.name)} · To: ${esc(sample.email || "—")}<br>Subject: <b>${esc(fillTemplate(e.emailSubject, e, sample))}</b><br>Attachment: 📎 ${esc(cardFileName(sample))}</div><pre>${esc(fillTemplate(e.emailBody, e, sample))}</pre></div>` : ""}
+      </details>
+      <div class="sbtools">
+        <div class="seg" id="sSeg">${[["all", "All", e.candidates.length], ["ready", "Ready", ready.length], ["todo", "Not approved", waiting], ["sent", "Emailed", sent], ["failed", "Failed", failed]].map(([k, t, n]) => `<button data-f="${k}" class="${k === filter ? "on" : ""}">${t} <span class="muted">${n}</span></button>`).join("")}</div>
+        <div class="search dsearch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="sQ" type="search" placeholder="Search name, student no, index or email" value="${esc(q)}"></div>
       </div>
-      ${sample ? `<details class="mprev"><summary>Preview for ${esc(sample.name)}</summary><div class="mbox"><div class="mto">To: ${esc(sample.email || "—")}<br>Subject: <b>${esc(fillTemplate(e.emailSubject, e, sample))}</b><br>Attachment: 📎 ${esc((sample.index || sample.name) + " Admission Card.pdf")}</div><pre>${esc(fillTemplate(e.emailBody, e, sample))}</pre></div></details>` : ""}
+      <div class="sgrid" id="sGrid">${list.map(box).join("") || `<div class="card empty dg-full">No students here.</div>`}</div>
       <div id="sendLog"></div>
-      <div class="actions" style="justify-content:flex-end;position:sticky;bottom:-28px;background:var(--sheet);padding:12px 0 6px">
+      <div class="actions sendbar">
+        <span class="muted">${noMail ? `${noMail} approved card${noMail === 1 ? " has" : "s have"} no valid email and will be skipped · ` : ""}Each student gets only their own card.</span>
+        <span style="flex:1"></span>
         ${failed ? `<button class="btn" id="mRetry">Retry ${failed} failed</button>` : ""}
-        <button class="btn primary" id="mGo" ${ready.length - noMail && SERVER ? "" : "disabled"}>${SERVER?.mode === "test" ? "Create" : "Send"} ${ready.length - noMail} email${ready.length - noMail === 1 ? "" : "s"}</button>
+        <button class="btn" id="mZip">Download all PDFs</button>
+        <button class="btn primary" id="mGo" ${ready.length - noMail && canSend() && !SENDING ? "" : "disabled"}>${live() ? "Send" : "Create"} all ${ready.length - noMail}</button>
       </div>`;
     $("#mSub").oninput = ev => { e.emailSubject = ev.target.value; saveSoon(); };
     $("#mBody").oninput = ev => { e.emailBody = ev.target.value; saveSoon(); };
     $("#mCc").oninput = ev => { e.emailCc = ev.target.value.trim(); saveSoon(); };
-    $("#mGo").onclick = () => run(e.candidates.filter(c => c.state === "approved" && isEmail(c.email)));
-    if ($("#mRetry")) $("#mRetry").onclick = () => run(e.candidates.filter(c => c.state === "failed" && isEmail(c.email)));
+    $("#sSeg").onclick = ev => { const b = ev.target.closest("[data-f]"); if (b) { filter = b.dataset.f; redraw(); } };
+    $("#sQ").oninput = ev => { q = ev.target.value; const pos = ev.target.selectionStart; redraw(); const i = $("#sQ"); i.focus(); i.setSelectionRange(pos, pos); };
+    $("#mGo").onclick = () => runAll(e.candidates.filter(c => c.state === "approved" && isEmail(c.email)));
+    if ($("#mRetry")) $("#mRetry").onclick = () => runAll(e.candidates.filter(c => c.state === "failed" && isEmail(c.email)));
+    $("#mZip").onclick = () => downloadAllCards(e);
+    $$("#sGrid .sbox").forEach(el => el.onclick = ev => {
+      const btn = ev.target.closest("[data-a]"); if (!btn) return;
+      const c = e.candidates.find(x => x.id === el.dataset.c); if (!c) return;
+      if (btn.dataset.a === "pdf") return downloadOneCard(e, c);
+      if (btn.dataset.a === "view") return viewCard(c);
+      if (btn.dataset.a === "send") return sendSingle(c);
+    });
   };
-  const run = async (list) => {
+  // keep the log and scroll position when redrawing
+  const redraw = () => { const sh = $("#sheet"), top = sh.scrollTop, log = $("#sendLog")?.innerHTML || ""; draw(); $("#sendLog").innerHTML = log; sh.scrollTop = top; };
+  const viewCard = c => {
+    const w = Math.min(760, innerWidth - 60), z = Math.min(1, w / 794);
+    const ov = document.createElement("div"); ov.className = "cardview";
+    ov.innerHTML = `<div class="cv-in"><div class="cv-bar"><b>${esc(c.name)} · ${esc(c.sid || c.index || "")}</b><span style="flex:1"></span><button class="btn small" id="cvPdf">Download PDF</button><button class="btn small" id="cvX">Close</button></div>
+      <div class="cv-pages">${cardPages(e, c).map(p => `<div style="zoom:${z}">${p}</div>`).join("")}</div></div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove();
+    ov.onclick = ev => { if (ev.target === ov) close(); };
+    $("#cvX", ov).onclick = close; $("#cvPdf", ov).onclick = () => downloadOneCard(e, c);
+  };
+  const sendSingle = async c => {
+    if (!canSend()) return toast("Email isn't set up yet");
+    if (!isEmail(c.email)) return toast("This student has no valid email");
+    const doIt = async () => {
+      if (!c.state || c.state === "draft") {   // approve this one card first (same rules as review)
+        if (!passes(e, c)) return toast("This card doesn't pass every check yet — open the review to see why");
+        Object.assign(c, { state: "approved", approvedBy: DB.settings.supervisor, approvedAt: Date.now(), note: "", outdated: false });
+      }
+      if (live() && !confirm(`${c.state === "sent" ? "Resend" : "Send"} the admission card to ${c.name} (${c.email})?`)) return;
+      busyIds.add(c.id); redraw();
+      try { const j = await sendOne(e, c); toast(j.mode === "test" ? `Saved to outbox for ${c.name}` : `Sent to ${c.name}`); }
+      catch (err) { Object.assign(c, { state: "failed", error: err.message }); toast("Failed: " + err.message); }
+      busyIds.delete(c.id); save();
+      if ($("#sheet").classList.contains("on") && $("#sheet").dataset.mode === "send") redraw();
+      if (cur === e && !$("#adm-edit").classList.contains("hide")) { renderCands(); refreshPipeline(); }
+    };
+    if (!c.state || c.state === "draft") supervisorGateKeep(doIt); else doIt();
+  };
+  // supervisor sign-in without losing this screen
+  const supervisorGateKeep = then => {
+    const st = DB.settings; let ok = false; try { ok = sessionStorage.getItem("sup-ok") === "1"; } catch { }
+    if (st.supervisor && (!st.pin || ok)) return then();
+    supervisorGate(() => { openSend(e).then(then); });
+  };
+  const runAll = async (list) => {
     if (!list.length || SENDING) return;
-    const live = SERVER.mode !== "test";
-    if (live && !confirm(`Send ${list.length} emails to students now?`)) return;
+    if (live() && !confirm(`Send ${list.length} emails to students now? Each student gets only their own card.`)) return;
     SENDING = { stop: false };
+    $("#mGo").disabled = true;
     $("#sendLog").innerHTML = `<div class="card sendbox"><div class="sendtop"><b id="sgT">Sending…</b><button class="link danger" id="sgStop">Stop</button></div><div class="rvprog"><i id="sgBar"></i></div><div class="sglist" id="sgList"></div></div>`;
-    $("#mGo").disabled = true; $("#sgStop").onclick = () => { SENDING.stop = true; $("#sgT").textContent = "Stopping after the current email…"; };
+    $("#sgStop").onclick = () => { SENDING.stop = true; $("#sgT").textContent = "Stopping after the current email…"; };
     $("#sendLog").scrollIntoView({ behavior: "smooth", block: "start" });
     let done = 0, ok = 0, bad = 0; busy(true);
     const one = async (c) => {
-      const row = document.createElement("div"); row.className = "sgrow"; row.innerHTML = `<span class="spin"></span><b>${esc(c.name)}</b><span class="muted">${esc(c.email)}</span>`; $("#sgList").prepend(row);
+      const row = document.createElement("div"); row.className = "sgrow"; row.innerHTML = `<span class="spin"></span><b>${esc(c.name)}</b><span class="muted">${esc(c.sid || "")} · ${esc(c.email)}</span>`; $("#sgList")?.prepend(row);
+      busyIds.add(c.id);
       try {
-        const text = fillTemplate(e.emailBody, e, c);
-        const r = await fetch("/api/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-          to: c.email.trim(), cc: e.emailCc || undefined, subject: fillTemplate(e.emailSubject, e, c), text, html: textToHtml(text),
-          attachments: [{ filename: `${(c.index || c.name).replace(/[\\/:*?"<>|]+/g, "-")} Admission Card.pdf`, html: cardPages(e, c).join("") }] }) });
-        const j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
-        if (!r.ok || !j.ok) throw new Error(j.error || "Server error");
-        Object.assign(c, { state: "sent", sentAt: Date.now(), error: "", outdated: false, sentMode: j.mode, sentTo: c.email.trim() }); ok++;
-        row.innerHTML = `<span class="okdot">✓</span><b>${esc(c.name)}</b><span class="muted">${j.mode === "test" ? "saved to " + esc(j.saved) : esc(c.email)}</span>`;
+        const j = await sendOne(e, c); ok++;
+        row.innerHTML = `<span class="okdot">✓</span><b>${esc(c.name)}</b><span class="muted">${esc(c.sid || "")} · ${j.mode === "test" ? "saved to " + esc(j.saved) : esc(c.email)}</span>`;
       } catch (err) {
         Object.assign(c, { state: "failed", error: err.message }); bad++;
         row.innerHTML = `<span class="baddot">!</span><b>${esc(c.name)}</b><span class="danger">${esc(err.message)}</span>`;
       }
-      done++; $("#sgBar").style.width = (100 * done / list.length) + "%"; save();
+      busyIds.delete(c.id); done++; if ($("#sgBar")) $("#sgBar").style.width = (100 * done / list.length) + "%"; save();
+      const el = $(`#sGrid .sbox[data-c="${CSS.escape(c.id)}"]`); if (el) el.outerHTML = box(c);
     };
     const queue = list.slice();
-    await Promise.all([0, 1].map(async () => { while (queue.length && !SENDING.stop) await one(queue.shift()); }));
+    const lanes = SERVER.site === "vercel" ? [0] : [0, 1];   // website: one at a time, ~2 s apart (Microsoft allows ~30 a minute)
+    await Promise.all(lanes.map(async () => { while (queue.length && !SENDING.stop) { await one(queue.shift()); if (SERVER.site === "vercel" && queue.length) await new Promise(r => setTimeout(r, 2100)); } }));
     busy(false); SENDING = null;
-    $("#sgT").textContent = `${ok} ${live ? "sent" : "created in outbox"}${bad ? ` · ${bad} failed` : ""}${done < list.length ? ` · ${list.length - done} not sent (stopped)` : ""}`;
-    $("#sgStop").remove();
-    toast(`${ok} email${ok === 1 ? "" : "s"} ${live ? "sent" : "saved to outbox"}${bad ? ` · ${bad} failed` : ""}`);
+    if ($("#sgT")) { $("#sgT").textContent = `${ok} ${live() ? "sent" : "created in outbox"}${bad ? ` · ${bad} failed` : ""}${done < list.length ? ` · ${list.length - done} not sent (stopped)` : ""}`; $("#sgStop")?.remove(); }
+    toast(`${ok} email${ok === 1 ? "" : "s"} ${live() ? "sent" : "saved to outbox"}${bad ? ` · ${bad} failed` : ""}`);
     if (cur === e && !$("#adm-edit").classList.contains("hide")) { renderCands(); refreshPipeline(); }
-    setTimeout(() => { if ($("#sheet").classList.contains("on") && !SENDING) { const log = $("#sendLog").innerHTML; draw(); $("#sendLog").innerHTML = log; } }, 900);
+    setTimeout(() => { if ($("#sheet").classList.contains("on") && $("#sheet").dataset.mode === "send" && !SENDING) redraw(); }, 900);
   };
   if (!$("#sheet").classList.contains("on")) openSheet(""); else $("#sheet").scrollTop = 0;
   $("#sheet").dataset.mode = "send"; $("#sheet").classList.add("wide");
@@ -431,14 +531,15 @@ async function renderMailSettings() {
   const box = $("#mailSettings"); if (!box) return;
   await checkServer();
   const st = DB.settings;
-  const status = !SERVER ? `<span class="chip c-red">Not running</span>` : SERVER.mode === "test" ? `<span class="chip c-orange">Test mode · outbox</span>`
+  const none = SERVER?.mode === "none";
+  const status = !SERVER ? `<span class="chip c-red">Not running</span>` : none ? `<span class="chip c-red">Not set up on the website</span>` : SERVER.mode === "test" ? `<span class="chip c-orange">Test mode · outbox</span>`
     : `<span class="chip c-green">${SERVER.mode === "graph" ? "Microsoft 365" : "SMTP"} · ${esc(SERVER.from)}</span>`;
   box.innerHTML = `
     <div class="field"><span class="lab">Email server</span><span style="flex:1;text-align:right">${status}</span>${SERVER?.mode === "graph" ? `<button class="btn small" id="sCheck">Check sign-in</button>` : ""}</div>
     <div class="field"><label for="sSup">Supervisor</label><input id="sSup" value="${esc(st.supervisor)}" placeholder="Name used on approvals"></div>
     <div class="field"><label for="sPin">Supervisor PIN</label><input id="sPin" type="password" value="${esc(st.pin)}" placeholder="optional" autocomplete="new-password"></div>
-    <div class="field"><label for="sTest">Send a test to</label><input id="sTest" type="email" placeholder="you@example.com"><button class="btn small" id="sTestGo" ${SERVER ? "" : "disabled"}>Test</button></div>
-    <div class="note" style="margin:8px 0 12px">${SERVER ? (SERVER.mode === "test" ? "Running in test mode: emails are written to the <code>outbox</code> folder. To send from Microsoft 365, copy <code>.env.example</code> to <code>.env</code>, fill in the four <code>MS_</code> values from your IT admin and restart <code>npm start</code>." : SERVER.mode === "graph" ? "Emails are sent from the Microsoft 365 mailbox above and saved in its Sent Items." : "Emails are sent through SMTP.") : "Start the app with <code>npm start</code> in the student-hub folder to enable PDF files and email."} The PIN only stops casual approvals in this browser.</div>`;
+    <div class="field"><label for="sTest">Send a test to</label><input id="sTest" type="email" placeholder="you@example.com"><button class="btn small" id="sTestGo" ${SERVER && !none ? "" : "disabled"}>Test</button></div>
+    <div class="note" style="margin:8px 0 12px">${none ? "To email admission cards from the website, add the four Microsoft 365 settings (<code>MS_TENANT_ID</code>, <code>MS_CLIENT_ID</code>, <code>MS_CLIENT_SECRET</code>, <code>MS_SENDER</code>) in Vercel → Settings → Environment Variables and redeploy. PDFs and <b>Download all</b> work without it." : SERVER ? (SERVER.mode === "test" ? "Running in test mode: emails are written to the <code>outbox</code> folder. To send from Microsoft 365, copy <code>.env.example</code> to <code>.env</code>, fill in the four <code>MS_</code> values from your IT admin and restart <code>npm start</code>." : SERVER.mode === "graph" ? "Emails are sent from the Microsoft 365 mailbox above and saved in its Sent Items." : "Emails are sent through SMTP.") : "Start the app with <code>npm start</code> in the student-hub folder to enable PDF files and email."} The PIN only stops casual approvals in this browser.</div>`;
   if ($("#sCheck")) $("#sCheck").onclick = async () => {
     busy(true);
     try { const j = await fetch("/api/mail-check").then(r => r.json()); if (!j.ok) throw new Error(j.error); toast(j.note); }

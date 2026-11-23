@@ -33,7 +33,9 @@ function openAdmCheck(e, opts = {}) {
   const R = () => AC.examReport(e, ctx);
   openSheet(`<div class="bar-top"><div><b style="font-size:17px">Check admission details</b><div class="muted">${esc(e.heading || e.level)}${opts.afterImport ? " · just imported" : ""}</div></div>${closeBtn}</div>
     <div id="acSum"></div><div class="seg" id="acSeg" style="margin-top:12px"></div><div id="acBody" style="margin-top:12px"></div>
-    <div class="actions" style="justify-content:space-between"><button class="btn" id="acExport">Export issues</button><button class="btn primary" id="acReview">Go to supervisor review</button></div>`);
+    <div class="actions" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><button class="btn" id="acExport">Export issues</button>
+      <span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="acReview">Review one by one</button><button class="btn primary" id="acQuick"></button></span></div>
+    <div id="acQuickNote" class="muted" style="font-size:13px;text-align:right;margin-top:-4px"></div>`);
   $("#sheet").classList.add("wide");
   const draw = () => {
     const r = R();
@@ -59,12 +61,47 @@ function openAdmCheck(e, opts = {}) {
   draw();
   $("#acSeg").onclick = ev => { const b = ev.target.closest("[data-f]"); if (b) { filter = b.dataset.f; draw(); } };
   $("#acReview").onclick = () => { closeSheet(); openReview(e); };
+  quickButton(e, $("#acQuick"), $("#acQuickNote"));
   $("#acExport").onclick = () => {
     const rows = R().rows.flatMap(({ c, issues }) => (issues.length ? issues : [{ level: "ok", text: "All good" }]).map(i => ({
       Name: c.name, "Student no": c.sid, "Index no": c.index, Email: c.email, Phone: c.phone, NIC: c.nic,
       Severity: i.level === "error" ? "Must fix" : i.level === "warn" ? "Double-check" : "OK", Issue: i.text })));
     xlsxDownload(rows, "Checks", `admission-check-${(e.level || "exam").replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
+}
+
+/* one click after creating: approve every card that passes all checks, then open the email step (you press Send).
+   Cards with problems stay "To review". The supervisor sign-in still applies. */
+function quickState(e) {
+  const missing = e.subjects.filter(s => !s.date).length;
+  const ready = e.candidates.filter(c => (c.state || "draft") === "draft" && passes(e, c)).length;
+  const approved = countState(e, "approved");
+  return { missing, ready, approved };
+}
+function quickButton(e, btn, note) {
+  if (!btn) return;
+  const q = quickState(e);
+  if (q.missing) {
+    btn.textContent = "Approve & email…"; btn.disabled = true;
+    if (note) note.textContent = `Fill in the timetable first (${q.missing} subject${q.missing === 1 ? "" : "s"} without a date), then email the cards.`;
+  } else if (!q.ready && q.approved) {
+    btn.textContent = `Email ${q.approved} approved card${q.approved === 1 ? "" : "s"}`; btn.disabled = false;
+    btn.onclick = () => { closeSheet(); setTimeout(() => openSend(e), 250); };
+  } else {
+    btn.textContent = `Approve ${q.ready} & email`; btn.disabled = !q.ready;
+    if (note) note.textContent = q.ready ? `Approves the ${q.ready} card${q.ready === 1 ? "" : "s"} that pass every check, then shows the email — nothing is sent until you press Send.` : "No cards pass every check yet.";
+    btn.onclick = () => approveAndEmail(e);
+  }
+}
+function approveAndEmail(e) {
+  supervisorGate(() => {
+    const t = Date.now(), list = e.candidates.filter(c => (c.state || "draft") === "draft" && passes(e, c));
+    if (!list.length && !countState(e, "approved")) return toast("No cards pass every check yet");
+    list.forEach(c => Object.assign(c, { state: "approved", approvedBy: DB.settings.supervisor, approvedAt: t, note: "", outdated: false }));
+    save(); if (cur === e && !$("#adm-edit").classList.contains("hide")) renderEditor();
+    if (list.length) toast(`${list.length} card${list.length === 1 ? "" : "s"} approved by ${DB.settings.supervisor}`);
+    setTimeout(() => openSend(e), 250);
+  });
 }
 
 /* exam editor: summary line + "Check details" button */
@@ -78,4 +115,7 @@ renderEditor = function () {
     <b>${r.errors ? `${r.errors} candidate${r.errors === 1 ? "" : "s"} must be fixed` : r.warns ? `${r.warns} candidate${r.warns === 1 ? "" : "s"} to double-check` : "All admission details checked"}</b>
     <span>${r.clean} of ${r.rows.length} all good${r.errors && r.warns ? ` · ${r.warns} to double-check` : ""} · tap to see the check</span></button>`);
   $("#acOpen").onclick = () => openAdmCheck(e);
+  // quick "Approve & email" next to the check summary
+  $("#acOpen").insertAdjacentHTML("afterend", `<div class="acquick"><button class="btn primary small" id="acQuick2"></button><span class="muted" id="acQuickNote2"></span></div>`);
+  quickButton(e, $("#acQuick2"), $("#acQuickNote2"));
 };

@@ -183,6 +183,25 @@ The Vercel site (`https://cit-student-hub.vercel.app`) can connect to Xero itsel
 
 To sign out, use **Sign out** on the Finance page. The office app (`npm start`) keeps working as before, with its own connection, and needs no password.
 
+## Admission cards: download all and email (website and office app)
+
+- **Download all:** in an exam, **Download all** makes one PDF per student and puts them in a single ZIP file. Each file is named by student number, so `2026/01/3035` becomes `2026-01-3035.pdf`. If a candidate has no student number, the index number is used instead. **One PDF** still puts every card in a single file.
+- **Approve & email:** after importing the admission Excel and filling in the timetable, press **Approve N & email**. It's next to the check summary in the exam, and also in the check window.
+  - It approves every card that passes all checks. Cards with problems stay in *To review*.
+  - It then opens the email step. Nothing is sent until you press **Send**.
+  - Each student gets their card attached, named by student number.
+- **On the website**, PDFs are made in the browser, so no server is needed. To send emails from the website, add the same Microsoft 365 settings as the office app in Vercel → Settings → Environment Variables (Production), then redeploy:
+
+  | Name | Value |
+  |---|---|
+  | `MS_TENANT_ID` | Directory (tenant) ID |
+  | `MS_CLIENT_ID` | Application (client) ID |
+  | `MS_CLIENT_SECRET` | client secret value |
+  | `MS_SENDER` | the mailbox to send from, e.g. `exams@yourdomain.lk` |
+  | `MAIL_FROM_NAME` | optional, e.g. `CIT Examinations` |
+
+  Steps 1–4 of *Microsoft 365 setup* above explain how IT creates these. Then use **Data → Email & approvals → Check sign-in** and **Send a test**. The website sends one email about every 2 seconds, to stay within Microsoft's limit.
+
 ## Data that always shows (`data-files` folder)
 
 The Excel files in `student-hub/data-files/` load automatically every time the app opens, in any browser on this computer: the membership fee report, members' details, last renewal year, the fellow↔associate list, the registration masters and the student renewals.

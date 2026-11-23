@@ -5,7 +5,9 @@
   "buildCommand": "",
   "cleanUrls": false,
   "rewrites": [
-    { "source": "/xero/:action", "destination": "/api/xero/:action" }
+    { "source": "/xero/:action", "destination": "/api/xero/:action" },
+    { "source": "/api/mail-check", "destination": "/api/health?check=1" },
+    { "source": "/api/test-email", "destination": "/api/send?test=1" }
   ],
   "functions": {
     "api/**/*.js": { "maxDuration": 60 }

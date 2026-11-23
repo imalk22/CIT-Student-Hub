@@ -16,7 +16,9 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const fmtMonth = d => { if (!d) return ""; const [y, m] = d.split("-"); return `${MONTHS[+m - 1]?.slice(0, 3) || ""} ${y}`; };
 const pad = (n, w = 3) => String(n).padStart(w, "0");
 const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 2400); };
-const download = (name, blob) => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+// Chrome ignores a download name that has characters like "–", so keep names to plain characters
+const safeFileName = n => String(n || "download").replace(/[–—]/g, "-").normalize("NFKD").replace(/[^\x20-\x7E]/g, "").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() || "download";
+const download = (name, blob) => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = safeFileName(name); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
 
 /* ---------------- motion helpers ---------------- */
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -545,7 +547,8 @@ function renderEditor() {
 
     <div class="stickyfoot">
       <button class="btn danger" id="eDel">Delete</button><span style="flex:1"></span>
-      <button class="btn" id="ePrint" ${e.candidates.length ? "" : "disabled"} title="All cards in one PDF">PDF (${e.candidates.length})</button>
+      <button class="btn" id="eZip" ${e.candidates.length ? "" : "disabled"} title="One PDF per student, named by student number, in one ZIP"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download all (${e.candidates.length})</button>
+      <button class="btn" id="ePrint" ${e.candidates.length ? "" : "disabled"} title="All cards in one PDF">One PDF</button>
       <button class="btn" id="eReview" ${e.candidates.length ? "" : "disabled"}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>Review</button>
       <button class="btn primary" id="eSend" ${countState(e, "approved") ? "" : "disabled"}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg>Send ${countState(e, "approved") || ""}</button>
     </div>`;
@@ -651,6 +654,7 @@ function bindEditor() {
     DB.exams = DB.exams.filter(x => x !== e); cur = null; save(); renderAdmissions();
   };
   $("#ePrint").onclick = () => pdfDownload(e.candidates.flatMap(c => cardPages(e, c)), `Admission cards - ${e.level}.pdf`);
+  $("#eZip").onclick = () => downloadAllCards(e);
 }
 function autoAdd() {
   const e = cur, have = new Set(e.candidates.map(c => c.sid));
@@ -822,7 +826,7 @@ function previewCards(cands) {
   };
   $("#pv-prev").onclick = () => { if (i > 0) { i--; draw(); } };
   $("#pv-next").onclick = () => { if (i < cands.length - 1) { i++; draw(); } };
-  $("#pv-print").onclick = () => printPages(cardPages(e, cands[i]));
+  $("#pv-print").onclick = () => downloadOneCard(e, cands[i]);
   requestAnimationFrame(draw);
 }
 
