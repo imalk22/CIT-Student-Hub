@@ -76,13 +76,15 @@ function renderFinance() {
   const X = DB.xero, F = finIndex(), S = XSTATUS || {};
   const people = finPeople(), sum = xs => xs.reduce((s, x) => s + x.due, 0);
   const stu = people.filter(p => p.kind === "student"), mem = people.filter(p => p.kind === "member");
-  const conn = S.offline ? `<div class="note">Xero syncing works when the app is opened with <b>npm start</b> on the office computer (not on the website).${X ? ` Showing the copy synced ${ago(X.syncedAt)}.` : ""}</div>`
-    : !S.configured ? `<div class="note"><b>Xero isn't set up yet.</b> Create a Xero app and add <code>XERO_CLIENT_ID</code> / <code>XERO_CLIENT_SECRET</code> to <code>.env</code> — see README → <i>Xero setup</i>. Redirect URI to register: <code>${esc(S.redirect || "")}</code></div>`
+  const onVercel = S.site === "vercel";
+  const conn = S.offline ? `<div class="note">Can't reach the Xero service right now.${X ? ` Showing the copy synced ${ago(X.syncedAt)}.` : ""}</div>`
+    : onVercel && S.storage === false ? `<div class="note"><b>Storage isn't set up yet.</b> In Vercel → Storage, add <b>Upstash for Redis</b> (free), connect it to this project and redeploy — see README → <i>Xero on the Vercel site</i>.</div>`
+    : !S.configured ? `<div class="note"><b>Xero isn't set up yet.</b> Add <code>XERO_CLIENT_ID</code> / <code>XERO_CLIENT_SECRET</code> ${onVercel ? "in Vercel → Settings → Environment Variables and redeploy" : "to <code>.env</code> and restart npm start"} — see README. Redirect URI to register in the Xero app: <code>${esc(S.redirect || "")}</code></div>`
     : !S.connected ? `<div class="xconn"><span>Xero is set up but not connected.</span><a class="btn primary small" href="/xero/connect">Connect to Xero</a></div>`
     : `<div class="xconn"><span>Connected to <b>${esc(S.tenant)}</b> · read-only · updates automatically every ${S.autoEveryMin || 10} min${X ? ` · last ${ago(X.syncedAt)}` : ""}${S.lastError ? ` · <span class="owe">last try failed: ${esc(S.lastError)}</span>` : ""}</span><span style="display:flex;gap:8px"><button class="btn small primary" id="xSync">Sync now</button><button class="btn small" id="xOff">Disconnect</button></span></div>`;
   const list = finSeg === "student" ? stu : finSeg === "member" ? mem : null;
   box.innerHTML = `
-    <div class="titlebar"><h1>Finance</h1>${X ? `<button class="link" id="xExport">Export to Excel</button>` : ""}</div>
+    <div class="titlebar"><h1>Finance</h1><span style="display:flex;gap:12px">${X ? `<button class="link" id="xExport">Export to Excel</button>` : ""}${onVercel ? `<a class="link" href="/api/login?logout">Sign out</a>` : ""}</span></div>
     <p class="sub">Outstanding invoices from Xero${X ? ` · ${esc(X.tenant || "")} · synced ${new Date(X.syncedAt).toLocaleString("en-GB")}` : ""}</p>
     ${conn}
     ${F ? `<div class="kpi4" style="margin-top:14px">

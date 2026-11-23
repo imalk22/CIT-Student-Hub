@@ -117,7 +117,7 @@ async function makePdf(pagesHtml) {
 
 /* ---------- helpers ---------- */
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".md": "text/plain; charset=utf-8" };
-const BLOCK = /^(node_modules|outbox|data-files|_test|ref\/|\.env|server\.js|xero-server\.js|xero-tokens|package(-lock)?\.json|\.git)/i;
+const BLOCK = /^(node_modules|outbox|data-files|_test|ref\/|\.env|server\.js|xero-server\.js|xero-tokens|package(-lock)?\.json|\.git|api\/|lib\/|middleware\.js|vercel\.json)/i;
 function send(res, code, body, type = "application/json; charset=utf-8") {
   res.writeHead(code, { "Content-Type": type, "Cache-Control": "no-store" });
   res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body));

@@ -152,6 +152,37 @@ Anything left over appears under **Not matched**. To fix those, put the student 
 
 > Older Xero apps may still use the broad scope `accounting.transactions.read` instead. In that case set `XERO_SCOPES=offline_access accounting.transactions.read accounting.contacts.read` in `.env`.
 
+## Xero on the Vercel site (auto-updating, staff login)
+
+The Vercel site (`https://cit-student-hub.vercel.app`) can connect to Xero itself, so Finance and Dues stay up to date without the office computer.
+
+- **Staff login:** the whole site, including `data.json`, needs a staff password. People stay signed in for 30 days. Changing the password signs everyone out.
+- **Live updates:**
+  - While anyone has the site open, the Xero data is re-read once it's older than 10 minutes.
+  - **Sync now** updates straight away.
+  - A daily job keeps the Xero connection alive even when nobody opens the site.
+
+**One-time setup** (in this order):
+
+1. **Storage.** In Vercel, open the project → **Storage** → **Create / Browse Marketplace** → **Upstash for Redis** (free plan). Create it and **connect it to this project**. This keeps the Xero connection between visits.
+2. **Environment variables.** Open Vercel → project → **Settings → Environment Variables** and add these for **Production**:
+
+   | Name | Value |
+   |---|---|
+   | `HUB_PASSWORD` | the staff password (long, not used anywhere else) |
+   | `XERO_CLIENT_ID` | from the Xero app |
+   | `XERO_CLIENT_SECRET` | from the Xero app |
+   | `XERO_REDIRECT_URI` | `https://cit-student-hub.vercel.app/xero/callback` |
+   | `CRON_SECRET` | any long random text (protects the daily sync) |
+
+3. **Xero app.** In the Xero app's **Configuration**, click **Add another URI** under redirect URIs and add `https://cit-student-hub.vercel.app/xero/callback`. Keep the `localhost` one too.
+4. **Deploy.** Merge the branch into `main`, or click **Redeploy** in Vercel after adding the variables.
+5. **Connect.** Open the site and sign in with the staff password. Go to **Finance → Connect to Xero** and click **Allow access**.
+
+> Set `HUB_PASSWORD` **before** deploying. Without it the site shows "This site is locked" rather than being open to everyone.
+
+To sign out, use **Sign out** on the Finance page. The office app (`npm start`) keeps working as before, with its own connection, and needs no password.
+
 ## Data that always shows (`data-files` folder)
 
 The Excel files in `student-hub/data-files/` load automatically every time the app opens, in any browser on this computer: the membership fee report, members' details, last renewal year, the fellow↔associate list, the registration masters and the student renewals.
