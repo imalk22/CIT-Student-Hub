@@ -140,6 +140,8 @@ XERO_CLIENT_SECRET=<client secret>
 
 **3. Connect.** Open Finance and click **Connect to Xero**. Sign in, pick the CIT organisation and click **Allow access**. The app asks for read-only access to invoices and contacts (`accounting.invoices.read`, `accounting.contacts.read`). The connection is saved in `xero-tokens.json` on this computer, which is excluded from git and never served. It stays connected as long as you sync at least once every 60 days.
 
+**Live updates.** Once connected, the app re-reads Xero by itself every 10 minutes. You can change this with `XERO_SYNC_MINUTES` in `.env` (minimum 2). Any open Finance, student or member page refreshes within about 2 minutes of each sync and shows a toast when the outstanding total changes. **Sync now** still updates straight away.
+
 **How invoices are matched.** Only unpaid sales invoices (*Awaiting payment*) are read. Each one is matched to a person in this order:
 1. A student number (`2024/A1/3236`) or index number in the contact's **account number**, the contact name, the invoice reference or the line description.
 2. A membership number (`F 014`, `A-352`) in the account number, contact name or reference.

@@ -37,6 +37,28 @@ async function xeroSync(quiet) {
   if (currentTab === "fin") renderFinance();
 }
 
+/* live updates: the local server re-reads Xero on its own; every 2 minutes this browser quietly picks up the
+   newest copy and redraws whatever finance view is open. */
+async function xeroPoll() {
+  if (document.hidden) return;
+  const S = await xeroStatus();
+  if (S.offline || !S.connected) return;
+  try {
+    const r = await fetch("/api/xero/outstanding", { cache: "no-store" }); if (!r.ok) return;
+    const j = await r.json();
+    if (DB.xero && j.syncedAt === DB.xero.syncedAt) return;
+    const before = DB.xero ? finIndex()?.total : null;
+    DB.xero = j; _finIdx = null; save();
+    const after = finIndex().total;
+    if (before != null && Math.round(before) !== Math.round(after)) toast(`Xero updated · outstanding now ${rs(after)}`);
+    if (currentTab === "fin") renderFinance();
+    else if (!$("#v-profile").classList.contains("hide") && typeof refreshProfile === "function") refreshProfile();
+    else if (!$("#v-mprof").classList.contains("hide") && mProfileNo) { const m = MEMBERS().find(x => x.no === mProfileNo); if (m) renderMemberProfile(m); }
+  } catch { }
+}
+(async () => { while (!DB) await new Promise(r => setTimeout(r, 200)); setTimeout(xeroPoll, 4000); setInterval(xeroPoll, 120e3); })();
+document.addEventListener("visibilitychange", () => { if (!document.hidden) xeroPoll(); });
+
 function finPeople() {
   const F = finIndex(); if (!F) return [];
   const stu = new Map(DB.students.map(s => [s.id, s])), mem = new Map((typeof MEMBERS === "function" ? MEMBERS() : []).map(m => [m.no, m]));
@@ -48,6 +70,7 @@ function finPeople() {
 }
 
 function renderFinance() {
+  const keepQ = $("#finq")?.value || "";
   $$("main > .view").forEach(v => v.classList.add("hide"));
   const box = $("#v-fin"); box.classList.remove("hide");
   const X = DB.xero, F = finIndex(), S = XSTATUS || {};
@@ -56,7 +79,7 @@ function renderFinance() {
   const conn = S.offline ? `<div class="note">Xero syncing works when the app is opened with <b>npm start</b> on the office computer (not on the website).${X ? ` Showing the copy synced ${ago(X.syncedAt)}.` : ""}</div>`
     : !S.configured ? `<div class="note"><b>Xero isn't set up yet.</b> Create a Xero app and add <code>XERO_CLIENT_ID</code> / <code>XERO_CLIENT_SECRET</code> to <code>.env</code> — see README → <i>Xero setup</i>. Redirect URI to register: <code>${esc(S.redirect || "")}</code></div>`
     : !S.connected ? `<div class="xconn"><span>Xero is set up but not connected.</span><a class="btn primary small" href="/xero/connect">Connect to Xero</a></div>`
-    : `<div class="xconn"><span>Connected to <b>${esc(S.tenant)}</b> · read-only${X ? ` · synced ${ago(X.syncedAt)}` : ""}</span><span style="display:flex;gap:8px"><button class="btn small primary" id="xSync">Sync now</button><button class="btn small" id="xOff">Disconnect</button></span></div>`;
+    : `<div class="xconn"><span>Connected to <b>${esc(S.tenant)}</b> · read-only · updates automatically every ${S.autoEveryMin || 10} min${X ? ` · last ${ago(X.syncedAt)}` : ""}${S.lastError ? ` · <span class="owe">last try failed: ${esc(S.lastError)}</span>` : ""}</span><span style="display:flex;gap:8px"><button class="btn small primary" id="xSync">Sync now</button><button class="btn small" id="xOff">Disconnect</button></span></div>`;
   const list = finSeg === "student" ? stu : finSeg === "member" ? mem : null;
   box.innerHTML = `
     <div class="titlebar"><h1>Finance</h1>${X ? `<button class="link" id="xExport">Export to Excel</button>` : ""}</div>
@@ -90,6 +113,7 @@ function renderFinance() {
       $("#finList").innerHTML = rows.slice(0, 300).map(i => `<div class="row"><span class="t"><b>${esc(i.contact.name || "No contact")}</b><span>${esc([i.contact.accountNumber, i.contact.email].filter(Boolean).join(" · ") || "no account number")}</span></span></div>${invRow(i)}`).join("") || `<div class="empty">Every invoice is matched.</div>`;
     }
   };
+  if ($("#finq")) $("#finq").value = keepQ;
   draw();
   if ($("#finq")) $("#finq").oninput = draw;
   if ($("#finSeg")) $("#finSeg").onclick = e => { const b = e.target.closest("[data-s]"); if (b) { finSeg = b.dataset.s; renderFinance(); } };

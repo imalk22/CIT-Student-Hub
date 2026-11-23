@@ -93,13 +93,26 @@ module.exports = function xero({ ROOT, PORT, send }) {
     };
   }
 
+  /* automatic sync: re-read Xero every XERO_SYNC_MINUTES (default 10) while connected, so the app picks up
+     payments and new invoices without anyone pressing Sync. Browsers poll /api/xero/outstanding (cheap, cached). */
+  const EVERY = Math.max(2, +process.env.XERO_SYNC_MINUTES || 10) * 60e3;
+  let syncing = null, lastError = "";
+  async function refresh() {
+    if (!tok?.refresh) return cache?.data;
+    if (!syncing) syncing = outstanding().then(data => { cache = { at: Date.now(), data }; lastError = ""; return data; })
+      .catch(e => { lastError = e.message; console.error("[xero] auto-sync:", e.message); throw e; }).finally(() => { syncing = null; });
+    return syncing;
+  }
+  setInterval(() => { if (tok?.refresh) refresh().catch(() => { }); }, EVERY).unref();
+  if (tok?.refresh) setTimeout(() => refresh().catch(() => { }), 3000).unref();
+
   /* returns true when the request was handled */
   return async function handle(req, res, url) {
     if (!url.pathname.startsWith("/api/xero") && !url.pathname.startsWith("/xero/")) return false;
     if (!local(req)) { send(res, 403, { error: "Xero is only available on this computer" }); return true; }
 
     if (url.pathname === "/api/xero/status") {
-      send(res, 200, { configured: CONFIGURED, connected: !!tok?.refresh, tenant: tok?.tenantName || "", connectedAt: tok?.connectedAt || 0, redirect: REDIRECT, scopes: SCOPES });
+      send(res, 200, { autoEveryMin: EVERY / 60e3, lastSync: cache?.at || 0, lastError, configured: CONFIGURED, connected: !!tok?.refresh, tenant: tok?.tenantName || "", connectedAt: tok?.connectedAt || 0, redirect: REDIRECT, scopes: SCOPES });
       return true;
     }
     if (url.pathname === "/xero/connect") {
@@ -138,8 +151,9 @@ module.exports = function xero({ ROOT, PORT, send }) {
       return true;
     }
     if (url.pathname === "/api/xero/outstanding") {
-      if (!cache || url.searchParams.has("refresh") || Date.now() - cache.at > 5 * 60e3) cache = { at: Date.now(), data: await outstanding() };
-      send(res, 200, cache.data);
+      if (!tok?.refresh) throw new Error("Not connected to Xero — click Connect to Xero first");
+      if (!cache || url.searchParams.has("refresh") || Date.now() - cache.at > EVERY + 60e3) await refresh();
+      send(res, 200, { ...cache.data, autoEveryMin: EVERY / 60e3, lastError });
       return true;
     }
     send(res, 404, { error: "Not found" });
