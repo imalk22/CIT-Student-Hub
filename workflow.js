@@ -371,7 +371,7 @@ function emlFile({ to, cc, subject, text, html, filename, pdfB64 }) {
     `--${alt}`, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrap76(b64utf8(text)),
     `--${alt}`, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrap76(b64utf8(html)),
     `--${alt}--`, "",
-    `--${bd}`, `Content-Type: application/pdf; name="${filename}"`, `Content-Disposition: attachment; filename="${filename}"`, "Content-Transfer-Encoding: base64", "", wrap76(pdfB64),
+    ...(pdfB64 ? [`--${bd}`, `Content-Type: application/pdf; name="${filename}"`, `Content-Disposition: attachment; filename="${filename}"`, "Content-Transfer-Encoding: base64", "", wrap76(pdfB64)] : []),   // no attachment for results emails
     `--${bd}--`, ""];
   return new Blob([L.join("\r\n")], { type: "message/rfc822" });
 }

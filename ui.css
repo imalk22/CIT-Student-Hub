@@ -608,3 +608,12 @@ span.fromrec{display:inline}
 .sendhow .seg button[disabled]{opacity:.45;cursor:not-allowed}
 .sb-note.prep{background:rgba(175,82,222,.12);color:#8e3fc0}
 .sbox.st-prepared{border-color:rgba(175,82,222,.5)}
+
+/* ---------- results emails ---------- */
+.rsubs{display:flex;flex-wrap:wrap;gap:4px}
+.rs{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;border-radius:7px;padding:3px 7px;background:var(--fill2);color:var(--muted);white-space:nowrap}
+.rs b{font-weight:800}
+.rs.p{background:rgba(52,199,89,.14);color:#1f9d45}.rs.f{background:rgba(255,59,48,.12);color:var(--red)}
+.rs.a{background:var(--fill);color:var(--muted)}.rs.e{background:rgba(10,132,255,.1);color:var(--blue)}
+.sbox.rbox.st-prepared{border-color:rgba(175,82,222,.5)}.sbox.rbox.st-sent{border-color:rgba(52,199,89,.55)}
+.cv-pages table{max-width:100%}
