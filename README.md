@@ -197,8 +197,7 @@ In **Admissions → Email exam results**, drop the results Excel the Examination
 - The app reads the sheet with the email addresses (usually **Summary**). Rows without a student or index number are skipped, such as the subject-wise summary table underneath.
 - Each student gets their own email containing a short message and **their results only**:
   - student number and index number
-  - every subject with its marks and status (Pass, Fail, Absent, Exempted, Previously Completed, Not taken)
-  - total and average
+  - every subject with its result (Pass, Fail, Absent, Exempted, Previously Completed, Not taken), with no marks
   - the overall result from the sheet
 - There are one box per student, filters for Completed, Referred / Fail, Absent, Done and No email, and **View email** to preview it.
 - Send the emails the same way as admission cards: **Open in Outlook** (you press Send), **Email app link**, or **Send automatically** if Microsoft 365 is set up.

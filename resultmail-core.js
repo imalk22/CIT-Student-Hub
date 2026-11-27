@@ -101,12 +101,9 @@
       passedLine: passed.length ? ` Well done on passing ${listWords(passed.map(subj))}.` : "",
     };
     const subject = fill(P.subject, v), para = fill(P.message, v), closing = fill(P.closing, v);   // results only — one message for everyone
-    const mk = m => m == null ? "–" : (Math.round(m * 100) / 100).toString();
-    const avg = row.average != null ? (Math.round(row.average * 100) / 100).toFixed(2) : "";
-    // plain text
+        // plain text
     const text = [`Dear ${row.name},`, "", para, "", `${batch.title}`, `Student No: ${row.sid || "—"}    Index No: ${row.index || "—"}`, "",
-      ...row.results.map(r => `• ${r.code ? r.code + " " : ""}${r.name}: ${r.marks != null ? mk(r.marks) + " – " : ""}${r.status || "—"}`),
-      ...(row.total != null ? ["", `Total marks: ${mk(row.total)}${avg ? `    Average: ${avg}` : ""}`] : []),
+      ...row.results.map(r => `• ${r.code ? r.code + " " : ""}${r.name}: ${r.status || "—"}`),
       `Overall result: ${v.result}`, "", closing].join("\n");
     // HTML (inline styles so it looks right in Outlook and Gmail)
     const pill = s => {
@@ -127,9 +124,8 @@
       <tr><td style="color:#6b6f76;padding:2px 0">Student No</td><td style="padding:2px 0"><b>${esc(row.sid || "—")}</b></td><td style="color:#6b6f76;padding:2px 0">Index No</td><td style="padding:2px 0"><b>${esc(row.index || "—")}</b></td></tr>
     </table>
     <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0 14px">
-      <tr style="background:#f4f6fa"><th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e3e5ea">Subject</th><th style="text-align:right;padding:8px 10px;border-bottom:1px solid #e3e5ea">Marks</th><th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e3e5ea">Result</th></tr>
-      ${row.results.map(r => `<tr><td style="padding:8px 10px;border-bottom:1px solid #eef0f3">${r.code ? `<b>${esc(r.code)}</b> · ` : ""}${esc(r.name)}</td><td style="padding:8px 10px;border-bottom:1px solid #eef0f3;text-align:right">${esc(mk(r.marks))}</td><td style="padding:8px 10px;border-bottom:1px solid #eef0f3">${pill(r.status)}</td></tr>`).join("")}
-      ${row.total != null ? `<tr><td style="padding:8px 10px"><b>Total marks</b>${avg ? ` <span style="color:#6b6f76">· average ${esc(avg)}</span>` : ""}</td><td style="padding:8px 10px;text-align:right"><b>${esc(mk(row.total))}</b></td><td></td></tr>` : ""}
+      <tr style="background:#f4f6fa"><th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e3e5ea">Subject</th><th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e3e5ea">Result</th></tr>
+      ${row.results.map(r => `<tr><td style="padding:8px 10px;border-bottom:1px solid #eef0f3">${r.code ? `<b>${esc(r.code)}</b> · ` : ""}${esc(r.name)}</td><td style="padding:8px 10px;border-bottom:1px solid #eef0f3">${pill(r.status)}</td></tr>`).join("")}
     </table>
     <p style="margin:0;white-space:pre-line">${esc(closing)}</p>
   </div>
