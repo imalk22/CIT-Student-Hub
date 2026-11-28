@@ -77,7 +77,10 @@
   const DEFAULT_TPL = {
     subject: "Your results – {exam}",
     message: "Please find your results for the {exam} examination below.",
-    closing: "If you have any questions about your results, please reply to this email.\n\nBest wishes,\nExaminations Division\nChartered Institute of Taxation of Sri Lanka",
+    question: "If you have any questions about your results, please reply to this email.",
+    signoff: "Best wishes,",
+    signName: "Examinations Division",
+    signOrg: "Chartered Institute of Taxation of Sri Lanka",
   };
   const DONE = /^(pass|exempted|exempted \(ta\)|previously completed|completed)$/i;
   function outcome(row) {
@@ -93,43 +96,105 @@
 
   function compose(batch, row, tpl = {}) {
     const P = { ...DEFAULT_TPL, ...tpl }, kind = outcome(row);
-    const passed = row.results.filter(r => /^pass$/i.test(r.status)), toSit = row.results.filter(r => /fail|absent|not taken/i.test(r.status));
-    const subj = r => `${r.name}${r.code ? ` (${r.code})` : ""}`;
     const v = {
       name: row.name, initials: row.initials || row.name, studentNo: row.sid, index: row.index, level: batch.level || "examination", exam: batch.exam || batch.title,
-      result: overallLabel(row), passed: listWords(passed.map(subj)), toSit: listWords(toSit.map(subj)) || "the remaining subjects",
-      passedLine: passed.length ? ` Well done on passing ${listWords(passed.map(subj))}.` : "",
+      result: overallLabel(row),
     };
-    const subject = fill(P.subject, v), para = fill(P.message, v), closing = fill(P.closing, v);   // results only — one message for everyone
-        // plain text
-    const text = [`Dear ${row.name},`, "", para, "", `${batch.title}`, `Student No: ${row.sid || "—"}    Index No: ${row.index || "—"}`, "",
-      ...row.results.map(r => `• ${r.code ? r.code + " " : ""}${r.name}: ${r.status || "—"}`),
-      `Overall result: ${v.result}`, "", closing].join("\n");
-    // HTML (inline styles so it looks right in Outlook and Gmail)
-    const pill = s => {
-      const k = /^pass$/i.test(s) ? ["#e7f6ec", "#1b7f3b"] : /fail/i.test(s) ? ["#fde8e7", "#c62828"] : /absent|not taken/i.test(s) ? ["#eeeeef", "#5f6368"] : DONE.test(s) ? ["#e8f0fe", "#1a56b0"] : ["#f1f1f3", "#444"];
-      return `<span style="display:inline-block;padding:2px 10px;border-radius:999px;background:${k[0]};color:${k[1]};font-weight:600;font-size:12px;white-space:nowrap">${esc(s || "—")}</span>`;
-    };
-    const band = { completed: ["#1b7f3b", "#e7f6ec", v.result], referred: [/fail/i.test(v.result) ? "#c62828" : "#b25e00", /fail/i.test(v.result) ? "#fde8e7" : "#fff4e5", v.result], absent: ["#5f6368", "#f1f1f3", "Absent"] }[kind];
-    const html = `<div style="font-family:Segoe UI,Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1c1c1e;max-width:640px">
-  <div style="background:#0b4aa2;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0">
-    <div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.85">Chartered Institute of Taxation of Sri Lanka</div>
-    <div style="font-size:18px;font-weight:700;margin-top:4px">${esc(batch.title)}</div>
-  </div>
-  <div style="border:1px solid #e3e5ea;border-top:0;border-radius:0 0 10px 10px;padding:20px">
-    <p style="margin:0 0 12px">Dear ${esc(row.name)},</p>
-    <div style="background:${band[1]};color:${band[0]};border-radius:8px;padding:10px 14px;font-weight:700;margin:0 0 12px">Overall result: ${esc(band[2])}</div>
-    <p style="margin:0 0 16px">${esc(para)}</p>
-    <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin:0 0 6px">
-      <tr><td style="color:#6b6f76;padding:2px 0">Student No</td><td style="padding:2px 0"><b>${esc(row.sid || "—")}</b></td><td style="color:#6b6f76;padding:2px 0">Index No</td><td style="padding:2px 0"><b>${esc(row.index || "—")}</b></td></tr>
+    const subject = fill(P.subject, v), para = fill(P.message, v), question = fill(P.question, v);
+    const signoff = fill(P.signoff, v), signName = fill(P.signName, v), signOrg = fill(P.signOrg, v);
+    // plain text — same order as the HTML
+    const text = [`Dear ${row.name},`, "", para, "", `Student No: ${row.sid || "—"}`, `Index No:   ${row.index || "—"}`, "", "SUBJECT RESULTS",
+      ...row.results.map(r => `  ${r.code ? r.code + "  " : ""}${r.name} — ${r.status || "—"}`), "",
+      `OVERALL RESULT: ${v.result.toUpperCase()}`, "", question, "", signoff, signName, signOrg].join("\n");
+
+    /* HTML — table layout + inline styles + Arial, so it looks the same in Outlook, Gmail and phones */
+    const F = "font-family:Arial,Helvetica,sans-serif;";
+    const BLUE = "#0b4aa2", INK = "#1f2937", MUTED = "#6b7280", LINE = "#e5e7eb";
+    const tone = s => /^pass$/i.test(s) ? ["#e6f4ea", "#137333"] : /fail/i.test(s) ? ["#fce8e6", "#c5221f"] : /absent|not taken/i.test(s) ? ["#f1f3f4", "#5f6368"] : DONE.test(s) ? ["#e8f0fe", "#1a56b0"] : ["#f1f3f4", "#3c4043"];
+    const pill = s => { const [bg, fg] = tone(s); return `<span style="${F}display:inline-block;padding:4px 12px;border-radius:12px;background-color:${bg};color:${fg};font-size:12px;font-weight:bold;white-space:nowrap">${esc(s || "—")}</span>`; };
+    const big = { completed: ["#137333", "#e6f4ea"], absent: ["#5f6368", "#f1f3f4"], referred: /fail/i.test(v.result) ? ["#c5221f", "#fce8e6"] : ["#b45309", "#fef3e2"] }[kind];
+    const rows = row.results.map((r, i) => `
+              <tr>
+                <td style="${F}padding:11px 14px;border-bottom:1px solid ${LINE};background-color:${i % 2 ? "#fafbfd" : "#ffffff"}">
+                  ${r.code ? `<div style="${F}font-size:11px;letter-spacing:1px;font-weight:bold;color:${BLUE}">${esc(r.code)}</div>` : ""}
+                  <div style="${F}font-size:14px;line-height:19px;color:${INK};margin-top:2px">${esc(r.name)}</div></td>
+                <td style="${F}padding:11px 14px;border-bottom:1px solid ${LINE};background-color:${i % 2 ? "#fafbfd" : "#ffffff"}" align="right" valign="middle">${pill(r.status)}</td>
+              </tr>`).join("");
+    const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef2f7">
+  <tr><td align="center" style="padding:20px 8px">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid ${LINE};border-radius:12px">
+
+      <!-- header -->
+      <tr><td style="background-color:${BLUE};padding:24px 24px 20px">
+        <div style="${F}font-size:11px;letter-spacing:2px;color:#c7d7f5;font-weight:bold">CHARTERED INSTITUTE OF TAXATION OF SRI LANKA</div>
+        <div style="${F}font-size:24px;line-height:30px;color:#ffffff;font-weight:bold;margin-top:8px">Examination Results</div>
+        <div style="${F}font-size:14px;line-height:20px;color:#dbe6fb;margin-top:4px">${esc(batch.exam || batch.title)}</div>
+      </td></tr>
+      <tr><td style="background-color:#d4a537;height:4px;line-height:4px;font-size:0">&nbsp;</td></tr>
+
+      <!-- greeting + message -->
+      <tr><td style="padding:24px 24px 6px">
+        <div style="${F}font-size:16px;line-height:24px;color:${INK}">Dear <b>${esc(row.name)}</b>,</div>
+        <div style="${F}font-size:14px;line-height:22px;color:${INK};margin-top:12px">${esc(para)}</div>
+      </td></tr>
+
+      <!-- student no / index no -->
+      <tr><td style="padding:16px 24px 4px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td width="50%" style="background-color:#f5f7fb;border-left:4px solid ${BLUE};padding:11px 12px">
+              <div style="${F}font-size:11px;letter-spacing:1px;color:${MUTED};font-weight:bold">STUDENT NO</div>
+              <div style="${F}font-size:15px;color:${INK};font-weight:bold;margin-top:4px">${esc(row.sid || "—")}</div></td>
+            <td width="12" style="font-size:0">&nbsp;</td>
+            <td width="50%" style="background-color:#f5f7fb;border-left:4px solid ${BLUE};padding:11px 12px">
+              <div style="${F}font-size:11px;letter-spacing:1px;color:${MUTED};font-weight:bold">INDEX NO</div>
+              <div style="${F}font-size:15px;color:${INK};font-weight:bold;margin-top:4px">${esc(row.index || "—")}</div></td>
+          </tr>
+        </table>
+      </td></tr>
+
+      <!-- subject results -->
+      <tr><td style="padding:20px 24px 0">
+        <div style="${F}font-size:12px;letter-spacing:1.5px;color:${BLUE};font-weight:bold;margin-bottom:10px">SUBJECT RESULTS</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${LINE};border-radius:8px;border-collapse:separate;overflow:hidden">
+          <tr>
+            <td style="${F}padding:10px 14px;font-size:11px;letter-spacing:1px;color:${MUTED};font-weight:bold;background-color:#f3f6fb;border-bottom:1px solid ${LINE}">SUBJECT</td>
+            <td style="${F}padding:10px 14px;font-size:11px;letter-spacing:1px;color:${MUTED};font-weight:bold;background-color:#f3f6fb;border-bottom:1px solid ${LINE}" align="right">RESULT</td>
+          </tr>${rows}
+        </table>
+      </td></tr>
+
+      <!-- overall result (after the subjects) -->
+      <tr><td style="padding:18px 24px 4px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr><td align="center" style="background-color:${big[1]};border:2px solid ${big[0]};border-radius:10px;padding:16px">
+            <div style="${F}font-size:11px;letter-spacing:2px;color:${big[0]};font-weight:bold">OVERALL RESULT</div>
+            <div style="${F}font-size:26px;line-height:32px;color:${big[0]};font-weight:bold;margin-top:4px">${esc(v.result.toUpperCase())}</div>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <!-- questions -->
+      <tr><td style="padding:22px 24px 0">
+        <div style="${F}font-size:14px;line-height:22px;color:${INK}">${esc(question)}</div>
+      </td></tr>
+
+      <!-- sign-off, each on its own line -->
+      <tr><td style="padding:20px 24px 26px">
+        <div style="${F}font-size:14px;line-height:22px;color:${INK}">${esc(signoff)}</div>
+        <div style="${F}font-size:15px;line-height:22px;color:${BLUE};font-weight:bold;margin-top:10px">${esc(signName)}</div>
+        <div style="${F}font-size:13px;line-height:20px;color:${MUTED}">${esc(signOrg)}</div>
+      </td></tr>
+
+      <!-- footer -->
+      <tr><td style="background-color:#f5f7fb;border-top:1px solid ${LINE};padding:14px 24px">
+        <div style="${F}font-size:12px;line-height:18px;color:${MUTED}">Chartered Institute of Taxation of Sri Lanka · No. 484, Havelock Road, Colombo 06</div>
+        <div style="${F}font-size:11px;line-height:17px;color:#9ca3af;margin-top:4px">This email was sent to ${esc(row.email || "you")} with your personal examination results.</div>
+      </td></tr>
+
     </table>
-    <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0 14px">
-      <tr style="background:#f4f6fa"><th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e3e5ea">Subject</th><th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e3e5ea">Result</th></tr>
-      ${row.results.map(r => `<tr><td style="padding:8px 10px;border-bottom:1px solid #eef0f3">${r.code ? `<b>${esc(r.code)}</b> · ` : ""}${esc(r.name)}</td><td style="padding:8px 10px;border-bottom:1px solid #eef0f3">${pill(r.status)}</td></tr>`).join("")}
-    </table>
-    <p style="margin:0;white-space:pre-line">${esc(closing)}</p>
-  </div>
-</div>`;
+  </td></tr>
+</table>`;
     return { subject, text, html, kind, result: v.result };
   }
 

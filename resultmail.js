@@ -87,7 +87,10 @@ function openResultMails(batch) {
         <div class="card form" style="margin-top:8px">
           <div class="field stack"><label>Subject</label><input class="inp" data-t="subject" value="${esc(T.subject)}"></div>
           <div class="field stack"><label>Message <span class="muted">· shown above the student's results table</span></label><textarea rows="3" data-t="message">${esc(T.message)}</textarea></div>
-          <div class="field stack"><label>Closing / signature</label><textarea rows="5" data-t="closing">${esc(T.closing)}</textarea></div>
+          <div class="field stack"><label>Line after the results</label><input class="inp" data-t="question" value="${esc(T.question)}"></div>
+          <div class="field stack"><label>Sign-off</label><input class="inp" data-t="signoff" value="${esc(T.signoff)}"></div>
+          <div class="field stack"><label>Signed by</label><input class="inp" data-t="signName" value="${esc(T.signName)}"></div>
+          <div class="field stack"><label>Organisation</label><input class="inp" data-t="signOrg" value="${esc(T.signOrg)}"></div>
           <div class="field"><label>Copy to (CC)</label><input id="rCc" type="email" value="${esc(batch.cc || "")}" placeholder="optional, e.g. exams office"></div>
           <div class="field"><span class="muted" style="font-size:12.5px">Words in {brackets} are filled in for each student: {name} {level} {exam} {studentNo} {index} {result}</span><button class="link" id="rReset">Back to the standard wording</button></div>
         </div></details>
