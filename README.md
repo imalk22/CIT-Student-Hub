@@ -193,7 +193,7 @@ To sign out, use **Sign out** on the Finance page. The office app (`npm start`) 
 
 ## Email exam results to students
 
-In **Admissions → Email exam results**, drop the results Excel the Examinations Division produces, for example `Results_Analyst_Level_2_…xlsx`.
+In the **Exam results** tab (sidebar, or **Results** in the bottom bar), drop the results Excel the Examinations Division produces, for example `Results_Analyst_Level_2_…xlsx`.
 - The app reads the sheet with the email addresses (usually **Summary**). Rows without a student or index number are skipped, such as the subject-wise summary table underneath.
 - Each student gets their own email containing a short message and **their results only**:
   - student number and index number

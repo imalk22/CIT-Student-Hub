@@ -34,7 +34,7 @@ async function importResultsForEmail(file) {
   }
   const batch = { id: uid(), file: file.name, title: b.title, exam: b.exam, level: b.level, sheet: b.sheet, subjects: b.subjects, rows: b.rows, created: Date.now() };
   DB.resultMails ||= []; DB.resultMails.unshift(batch); save();
-  if (currentTab === "adm") renderResultBatches();
+  if (currentTab === "res") renderResultsTab();
   toast(`${b.rows.length} students read from ${b.sheet} — an email is ready for each`);
   openResultMails(batch);
 }
@@ -165,27 +165,58 @@ function openResultMails(batch) {
   checkServer().then(() => { if (!$("#sheet").classList.contains("on")) openSheet(""); $("#sheet").classList.add("wide"); draw(); });
 }
 
-/* Admissions page: drop zone + earlier lists */
-function renderResultBatches() {
-  const box = $("#resBatches"); if (!box) return;
+/* ================= Results tab ================= */
+function renderResultBatches() { if (currentTab === "res") renderResultsTab(); }   // kept for callers above
+function renderResultsTab() {
+  $$("main > .view").forEach(v => v.classList.add("hide"));
+  const box = $("#v-res"); box.classList.remove("hide");
   const L = DB.resultMails || [];
-  box.innerHTML = L.length ? L.map(b => { const done = b.rows.filter(r => r.state === "sent" || r.state === "prepared").length;
-    return `<button class="row action" data-b="${esc(b.id)}"><span class="ic" style="background:var(--green)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg></span>
-      <span class="t"><b>${esc(b.title)}</b><span>${plural(b.rows.length, "student")} · ${done} of ${b.rows.filter(r => RM.isEmail(r.email)).length} emailed · ${new Date(b.created).toLocaleDateString("en-GB")}</span></span><span class="chev">›</span></button>`; }).join("")
-    : `<div class="empty" style="padding:14px 4px">No results emailed yet.</div>`;
-  $$("#resBatches [data-b]").forEach(b => b.onclick = () => openResultMails(L.find(x => x.id === b.dataset.b)));
-}
-(function setupResultsDrop() {
-  const anchor = $("#exams"); if (!anchor) return;
-  anchor.insertAdjacentHTML("afterend", `<div class="h2row"><h2>Email exam results</h2></div>
-    <div class="card drop" id="resDrop"><div class="dropicon" style="color:var(--green)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg></div>
-      <b>Send each student their results</b><span>Drop the results Excel (e.g. <i>Results_Analyst_Level_2…xlsx</i>) — a personal email is written for every student, or <label class="link">choose a file<input type="file" id="resFile" accept=".xlsx,.xls" hidden></label></span></div>
-    <div class="card list" id="resBatches" style="margin-top:10px"></div>`);
-  const d = $("#resDrop");
-  ["dragenter", "dragover"].forEach(t => d.addEventListener(t, e => { e.preventDefault(); d.classList.add("over"); }));
-  ["dragleave", "drop"].forEach(t => d.addEventListener(t, e => { e.preventDefault(); d.classList.remove("over"); }));
-  d.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) importResultsForEmail(f); });
+  const done = b => b.rows.filter(r => r.state === "sent" || r.state === "prepared").length;
+  const withMail = b => b.rows.filter(r => RM.isEmail(r.email)).length;
+  const tot = L.reduce((a, b) => ({ students: a.students + b.rows.length, done: a.done + done(b), mail: a.mail + withMail(b) }), { students: 0, done: 0, mail: 0 });
+  box.innerHTML = `
+    <h1>Exam results</h1>
+    <p class="sub">Send every student their own exam results by email — results only (Pass / Fail, Completed / Referred), no marks.</p>
+    <div class="card drop" id="resDrop"><div class="dropicon" style="color:var(--green)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg></div>
+      <b>Upload a results Excel</b><span>Drop the results sheet (e.g. <i>Results_Analyst_Level_2_…xlsx</i>) here, or <label class="link">choose a file<input type="file" id="resFile" accept=".xlsx,.xls" hidden></label> — an email is written for every student.</span></div>
+    ${L.length ? `<div class="dkpis">
+      <div class="dkpi"><small>Result lists</small><b>${L.length}</b><span>Excel files uploaded</span></div>
+      <div class="dkpi blue"><small>Students</small><b>${tot.students.toLocaleString()}</b><span>${tot.mail.toLocaleString()} with an email</span></div>
+      <div class="dkpi"><small>Emailed</small><b style="color:var(--green)">${tot.done.toLocaleString()}</b><span>sent or made in Outlook</span></div>
+      <div class="dkpi orange"><small>Still to send</small><b>${(tot.mail - tot.done).toLocaleString()}</b><span>across all lists</span></div></div>` : ""}
+    <div class="h2row"><h2>Result lists</h2></div>
+    <div class="resgrid">${L.map(b => { const k = { completed: 0, referred: 0, absent: 0 }; b.rows.forEach(r => k[RM.outcome(r)]++);
+      const d = done(b), m = withMail(b), pct = m ? 100 * d / m : 0;
+      return `<button class="card rescard" data-b="${esc(b.id)}">
+        <div class="rc-top"><span class="ic" style="background:var(--green)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg></span>
+          <span class="rc-t"><b>${esc(b.title)}</b><span>${esc(b.file)} · ${new Date(b.created).toLocaleDateString("en-GB")}</span></span></div>
+        <div class="rc-chips"><span class="chip c-green">${k.completed} completed</span><span class="chip c-orange">${k.referred} referred / fail</span><span class="chip c-gray">${k.absent} absent</span></div>
+        <div class="dc-bar" style="background:var(--fill)"><i style="width:${pct.toFixed(1)}%"></i></div>
+        <div class="dc-barl"><span><b>${d}</b> of ${m} emailed</span><span>${plural(b.rows.length, "student")}</span></div>
+      </button>`; }).join("") || `<div class="card empty dg-full">No result lists yet — upload a results Excel above.</div>`}</div>`;
+  const dz = $("#resDrop");
+  ["dragenter", "dragover"].forEach(t => dz.addEventListener(t, e => { e.preventDefault(); dz.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(t => dz.addEventListener(t, e => { e.preventDefault(); dz.classList.remove("over"); }));
+  dz.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) importResultsForEmail(f); });
   $("#resFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) importResultsForEmail(f); };
-})();
-const _renderAdmissionsRM = renderAdmissions;
-renderAdmissions = function () { _renderAdmissionsRM(); renderResultBatches(); };
+  $$("#v-res [data-b]").forEach(el => el.onclick = () => openResultMails(L.find(x => x.id === el.dataset.b)));
+  fx(box, ".none");
+}
+
+/* navigation: its own tab in the sidebar and the bottom bar */
+$("main").insertAdjacentHTML("beforeend", `<section id="v-res" class="view hide"></section>`);
+const RES_IC = '<path d="M7 3h8l4 4v14H7z"/><path d="m10 14 2 2 4-4"/>';
+$('#sidebar .sb-nav [data-tab="adm"]')?.insertAdjacentHTML("afterend", `<button data-tab="res"><span class="sb-ic" style="--c:#16a34a"><svg viewBox="0 0 24 24">${RES_IC}</svg></span>Exam results</button>`);
+$('.tabbar [data-tab="adm"]')?.insertAdjacentHTML("afterend", `<button data-tab="res"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${RES_IC}</svg>Results</button>`);
+const _tabRes = tab;
+tab = function (name) {
+  if (name !== "res") { $("#v-res").classList.add("hide"); return _tabRes(name); }
+  currentTab = "res";
+  $$(".tabbar button").forEach(b => b.classList.toggle("on", b.dataset.tab === "res")); moveGlider();
+  scrollTo({ top: 0 }); try { sessionStorage.setItem("tab", "res"); } catch { }
+  renderResultsTab();
+};
+$$(".tabbar button, #sidebar .sb-nav button").forEach(b => b.onclick = () => tab(b.dataset.tab));
+// refresh the tab when a results window closes
+const _closeSheetRM = closeSheet;
+closeSheet = function () { const wasRes = $("#sheet").dataset.mode === "results"; _closeSheetRM(); if (wasRes && currentTab === "res") renderResultsTab(); };
