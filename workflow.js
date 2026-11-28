@@ -58,6 +58,11 @@ function checks(e, c) {
   out.push([isEmail(c.email), isEmail(c.email) ? "Email looks valid" : c.email ? "Email looks wrong" : "No email address"]);
   const dup = c.index && e.candidates.some(o => o !== c && o.index.trim() === c.index.trim());
   out.push([!!c.index.trim() && !dup, !c.index.trim() ? "No index number" : dup ? "Index number is used twice" : "Index number unique"]);
+  // the card prints the candidate's index number and the exam heading, so both must match this exam
+  const pre = (e.indexPrefix || "").trim(), okPre = !pre || !c.index.trim() || c.index.trim().startsWith(pre);
+  if (pre && c.index.trim()) out.push([okPre, okPre ? "Index number uses the exam prefix" : `Index number doesn't start with ${pre}`]);
+  const lvTitle = LEVEL_TITLE[e.level], okHead = !lvTitle || (e.heading || "").toUpperCase().includes(lvTitle);
+  out.push([okHead, okHead ? "Heading matches the level" : `Heading doesn't say ${lvTitle}`]);
   const applied = e.subjects.filter(s => c.status[s.id] === "X").length;
   out.push([applied > 0, applied ? `${applied} paper${applied === 1 ? "" : "s"} applied` : "No subject marked ×"]);
   const missing = e.subjects.filter(s => !s.date).length;

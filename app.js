@@ -583,13 +583,33 @@ function bindEditor() {
     if (e.type === "external") e.subjects.forEach((s, i) => s.venue = old[i]?.venue || "CIT");
     e.subjects.forEach((s, i) => { if (old[i]) { s.date = old[i].date; s.from = old[i].from; s.to = old[i].to; } });
     if (e.headingAuto) e.heading = defaultHeading(lv, e.subjects.find(s => s.date)?.date?.slice(0, 7));
+    const oldPrefix = e.indexPrefix;
     e.indexPrefix = e.indexPrefix.replace(/\/(AP|AN1|AN2|AD)\//, `/${LEVEL_CODE[lv]}/`);
-    e.candidates = e.candidates.map(c => { const s = DB.students.find(x => x.id === c.sid); const n = candidateFrom(e, s); n.name = c.name; n.index = c.index; n.id = c.id; return n; });
+    // keep the candidates' index numbers in step with the new level code (the card prints these)
+    const reIndex = ix => ix && oldPrefix && ix.startsWith(oldPrefix) ? e.indexPrefix + ix.slice(oldPrefix.length) : ix;
+    e.candidates = e.candidates.map(c => { const s = DB.students.find(x => x.id === c.sid); const n = candidateFrom(e, s); n.name = c.name; n.index = reIndex(c.index); n.id = c.id; n.email = c.email || n.email; return n; });
+    if (!e.headingAuto && !e.heading.toUpperCase().includes(LEVEL_TITLE[lv])) toast(`Check the exam heading — it doesn't say ${LEVEL_TITLE[lv]}`);
     save(); renderEditor();
   };
   $("#eHead").oninput = ev => { e.heading = ev.target.value; e.headingAuto = false; saveSoon(); cardChanged(e); };
   if ($("#ePlace")) $("#ePlace").onchange = ev => { e.place = ev.target.value; save(); cardChanged(e); };
+  /* The card prints each candidate's own index number, so a new prefix is carried into the index numbers
+     that were made from the old one (2026/AN1/E2/007 → 2026/AN1/E3/007) once the field is left. */
+  let prefixBefore = e.indexPrefix;
+  $("#ePrefix").onfocus = () => { prefixBefore = e.indexPrefix; };
   $("#ePrefix").oninput = ev => { e.indexPrefix = ev.target.value; saveSoon(); };
+  $("#ePrefix").onchange = ev => {
+    const old = prefixBefore, now = ev.target.value.trim();
+    e.indexPrefix = now; ev.target.value = now; prefixBefore = now; save();
+    if (!now || old === now) return;
+    const hit = old ? e.candidates.filter(c => c.index && c.index.startsWith(old)) : [];
+    if (hit.length && confirm(`Change the index numbers of ${plural(hit.length, "candidate")} from ${old}… to ${now}…?\n\nThe admission cards print these index numbers.`)) {
+      hit.forEach(c => { c.index = now + c.index.slice(old.length); touched(c); });
+      cardChanged(e); save(); renderEditor(); toast(`Index numbers now start with ${now}`);
+    }
+    const off = e.candidates.filter(c => c.index && !c.index.startsWith(now)).length;
+    if (off) toast(`${plural(off, "index number")} still ${off === 1 ? "doesn't" : "don't"} start with ${now} — use Number all or edit ${off === 1 ? "it" : "them"}`);
+  };
   $("#oAtt").onchange = ev => { e.options.attestation = ev.target.checked; save(); cardChanged(e); };
   $("#oGuide").onchange = ev => { e.options.guidelines = ev.target.checked; save(); cardChanged(e); };
   $("#eReview").onclick = () => openReview(e);
