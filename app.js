@@ -78,6 +78,7 @@ const chipFor = s => ({ Pass: "green", Completed: "green", Fail: "red", Referred
 const DEFAULT_VENUES = [
   { code: "CIT", name: "Chartered Institute of Taxation of Sri Lanka", address: "No. 484, Havelock Road,\nColombo 06." },
   { code: "UOC", name: "University of Colombo (UOC)", address: "Faculty of Graduate Studies\nExam Hall (5th Floor)\nNo. 35/30, Prof. Stanley Wijesundara Mawatha,\nColombo 07." },
+  { code: "USJP", name: "University of Sri Jayewardenepura (USJP)", address: "Gangodawila,\nNugegoda." },
 ];
 
 /* ---------------- store ---------------- */
@@ -154,6 +155,9 @@ async function load() {
   if (saved && saved.students) DB = saved;
   else DB = { students: normalizeStudents(structuredClone(ORIGINAL.students)), exams: [], venues: structuredClone(DEFAULT_VENUES), imports: [] };
   DB.exams ||= []; DB.venues ||= structuredClone(DEFAULT_VENUES); DB.imports ||= [];
+  // venues added to the built-in list later (e.g. USJP) also appear for people who already use the app
+  DB.settings ||= {}; DB.settings.venuesAdded ||= [];
+  for (const v of DEFAULT_VENUES) if (!DB.venues.some(x => x.code === v.code) && !DB.settings.venuesAdded.includes(v.code)) { DB.venues.push(structuredClone(v)); DB.settings.venuesAdded.push(v.code); }
   DB.settings ||= { supervisor: "", pin: "" };
   DB.exams.forEach(e => e.candidates.forEach(c => { c.state ||= "draft"; }));
   normalizeStudents(DB.students);
