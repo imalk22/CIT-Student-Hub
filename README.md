@@ -191,6 +191,20 @@ To sign out, use **Sign out** on the Finance page. The office app (`npm start`) 
 
   Steps 1–4 of *Microsoft 365 setup* above explain how IT creates these. Then use **Data → Email & approvals → Check sign-in** and **Send a test**. The website sends one email about every 2 seconds, to stay within Microsoft's limit.
 
+## Email exam results to students
+
+In the **Exam results** tab (sidebar, or **Results** in the bottom bar), drop the results Excel the Examinations Division produces, for example `Results_Analyst_Level_2_…xlsx`.
+- The app reads the sheet with the email addresses (usually **Summary**). Rows without a student or index number are skipped, such as the subject-wise summary table underneath.
+- Each student gets their own email containing a short message and **their results only**:
+  - student number and index number
+  - every subject with its result (Pass, Fail, Absent, Exempted, Previously Completed, Not taken), with no marks
+  - the overall result from the sheet
+- There are one box per student, filters for Completed, Referred / Fail, Absent, Done and No email, and **View email** to preview it.
+- Send the emails the same way as admission cards: **Open in Outlook** (you press Send), **Email app link**, or **Send automatically** if Microsoft 365 is set up.
+- **Message wording** lets you change the subject, the short message and the signature.
+- If a student has no email in the Excel, the email saved in their record is used and marked "from student records".
+- Each list is kept under **Email exam results**, so you can come back and see who has been done.
+
 ## Data that always shows (`data-files` folder)
 
 The Excel files in `student-hub/data-files/` load automatically every time the app opens, in any browser on this computer: the membership fee report, members' details, last renewal year, the fellow↔associate list, the registration masters and the student renewals.

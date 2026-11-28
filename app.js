@@ -1022,7 +1022,7 @@ $("#restoreIn").onchange = async e => {
   try {
     const d = JSON.parse(await f.text()); if (!Array.isArray(d.students)) throw 0;
     if (!confirm(`Replace current data with ${d.students.length} students from this backup?`)) return;
-    DB = { students: normalizeStudents(d.students), exams: d.exams || [], venues: d.venues || structuredClone(DEFAULT_VENUES), imports: d.imports || [], settings: d.settings || { supervisor: "", pin: "" }, members: d.members || DB.members };
+    DB = { students: normalizeStudents(d.students), exams: d.exams || [], venues: d.venues || structuredClone(DEFAULT_VENUES), imports: d.imports || [], settings: d.settings || { supervisor: "", pin: "" }, members: d.members || DB.members, resultMails: d.resultMails || DB.resultMails || [] };
     derive(); save(); renderData(); toast("Backup restored");
   } catch { toast("That file is not a Student Hub backup"); }
 };
